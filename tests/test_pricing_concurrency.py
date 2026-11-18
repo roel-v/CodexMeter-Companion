@@ -3,7 +3,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 import pytest
 from codexmeter import pricing
-from tests.test_pricing import SOURCE, NOW
+from tests.support.pricing import SOURCE, NOW
 
 
 def test_check_publication_waits_for_acceptance(tmp_path, monkeypatch):
@@ -59,3 +59,12 @@ def test_accept_rejects_superseded_review(tmp_path):
     assert store.status()['state'] == 'changed'
     assert len(store.revisions()) == 1
 
+
+
+def test_bad_history_is_reported_without_replacing_it(tmp_path):
+    store = pricing.PricingStore(tmp_path)
+    damaged = tmp_path / 'revision-damaged.json'
+    damaged.write_text('{broken', encoding='utf-8')
+    assert store.check(fetch=lambda: SOURCE, now=NOW)['state'] == 'error'
+    assert damaged.read_text() == '{broken'
+    assert store._key not in pricing._CHECKS

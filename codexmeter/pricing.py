@@ -5,6 +5,7 @@ import asyncio
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 import threading
 import urllib.request
@@ -74,7 +75,7 @@ def parse_prices(text: str) -> dict:
 class PricingStore:
     def __init__(self, root: Path = PRICING_DIR):
         self.root = root
-        self._key = str(root.resolve()).casefold()
+        self._key = os.path.normcase(str(root.resolve()))
 
     def revisions(self):
         from .pricing_seed import SEED
@@ -125,21 +126,29 @@ class PricingStore:
         with _STORE_LOCK:
             if _CHECKS.get(self._key) is not ticket:
                 return self.status()  # A newer request owns publication, even if it failed.
-            if candidate is None:
+            try:
+                if candidate is None:
+                    status = {**self.status(), "state": "error", "checked_at": now.timestamp(),
+                              "message": f"Pricing check failed; saved rates retained. {error}"}
+                else:
+                    # Acceptance may have completed while this fetch was in flight.
+                    latest = self.revisions()[-1]
+                    changed = digest != latest["source_sha256"]
+                    if changed:
+                        atomic_write_json(self.root / "pending.json", candidate)
+                    status = {"state": "changed" if changed else "current", "checked_at": now.timestamp(),
+                              "source_sha256": digest, "active_revision": latest["effective_from"],
+                              "message": ("OpenAI updated its pricing webpage. Your cost estimates still use your saved rates. Open the control panel and choose Review pricing change to see whether prices differ."
+                                          if changed else "Official pricing source matches the saved rates.")}
+            except Exception as exc:
                 status = {**self.status(), "state": "error", "checked_at": now.timestamp(),
-                          "message": f"Pricing check failed; saved rates retained. {error}"}
-            else:
-                # Acceptance may have completed while this fetch was in flight.
-                latest = self.revisions()[-1]
-                changed = digest != latest["source_sha256"]
-                if changed:
-                    atomic_write_json(self.root / "pending.json", candidate)
-                status = {"state": "changed" if changed else "current", "checked_at": now.timestamp(),
-                          "source_sha256": digest, "active_revision": latest["effective_from"],
-                          "message": ("OpenAI updated its pricing webpage. Your cost estimates still use your saved rates. Open the control panel and choose Review pricing change to see whether prices differ."
-                                      if changed else "Official pricing source matches the saved rates.")}
-            atomic_write_json(self.root / "status.json", status)
-            return status
+                          "message": f"Pricing check failed; saved rates retained. {exc}"}
+            try:
+                atomic_write_json(self.root / "status.json", status)
+                return status
+            finally:
+                if _CHECKS.get(self._key) is ticket:
+                    _CHECKS.pop(self._key, None)
 
     def accept_pending(self, expected_hash: str, now=None):
         """Called only after the user reviews the exact candidate in the control panel."""
