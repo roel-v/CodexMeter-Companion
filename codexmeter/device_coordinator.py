@@ -108,7 +108,6 @@ class DeviceCoordinator:
                 return
             self.kind = kind
             self.worker = self.usb_factory() if kind == 'usb' else self.ble
-            self.worker.single_attempt = True
             self.transition('switching', 'Selecting ' + kind)
             self.task = asyncio.create_task(self.worker.run(stop))
 

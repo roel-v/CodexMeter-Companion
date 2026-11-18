@@ -148,7 +148,7 @@ def test_discovery_loop_feeds_monitor_and_clears_failed_scan_evidence(tmp_path, 
         from codexmeter.device_registry import DeviceConfig
         async def available(): return True, None
         async def no_wait(*args): await asyncio.sleep(0)
-        monkeypatch.setattr("codexmeter.usb_transport.bluetooth_availability", available)
+        monkeypatch.setattr("codexmeter.ble_availability.bluetooth_availability", available)
         monkeypatch.setattr("codexmeter.device_manager._sleep_or_stop", no_wait)
         service = manager([DeviceConfig(ID)])
         service.discovery = discovery

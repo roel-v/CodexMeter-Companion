@@ -28,3 +28,10 @@ still retain the durable pause. BLE exposes its negotiated session through the s
 Operations have a 12-second deadline; maintenance IPC allows 20 seconds for bounded cancellation cleanup.
 Validation: closed-session regression failed before the fix; 61 ownership/maintenance/USB tests and 18 additional
 follow-up/BLE tests pass, including barrier-controlled native cleanup and an uncertain write.
+
+## Phase 4
+
+Both workers now execute one attempt; DeviceCoordinator alone owns retry/selection. Removed single_attempt switches,
+standalone backoff/jitter and their unused imports. Candidate disappearance ends an attempt. Bluetooth availability
+is in ble_availability.py; USB cleanup uses public discovery invalidation.
+Validation: 60 coordinator/discovery/recovery/follow-up tests passed; no references to removed retry modes remain.

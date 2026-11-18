@@ -140,7 +140,7 @@ class DeviceManager:
         return self.policy.observe(locked, now=now)
 
     async def _ble_discovery(self, stop_event):
-        from .usb_transport import bluetooth_availability
+        from .ble_availability import bluetooth_availability
         while not stop_event.is_set():
             eligible = any(s.config.enabled and not s.config.maintenance and
                 s.config.connection_mode != 'usb_only' and not (s.state.connected and s.state.transport == 'usb')

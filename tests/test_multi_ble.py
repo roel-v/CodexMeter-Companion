@@ -210,7 +210,7 @@ def test_device_worker_records_clean_disconnect_while_waiting_for_recovery():
         )
 
         class FakeDiscovery:
-            async def wait_for(self, _config, _stop_event):
+            def find(self, _config):
                 return discovered
 
         class FakeTransport:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import random
 from dataclasses import replace
 from typing import Callable
 
@@ -18,7 +17,6 @@ IdentityObserver = Callable[[DeviceConfig, DeviceIdentity], DeviceConfig]
 
 from .device_slot import DeviceSlot
 from .ble_discovery import DiscoveryService
-from .async_utils import sleep_or_stop as _sleep_or_stop
 
 
 class DeviceWorker:
@@ -33,67 +31,35 @@ class DeviceWorker:
         self.discovery = discovery
         self.transport = transport
         self.identity_observer = identity_observer
-        self.single_attempt = False
 
     @property
     def session(self):
         return self.transport.session
 
     async def run(self, stop_event: asyncio.Event) -> None:
-        backoff = 1.0
-        label = self.slot.config.label
-        while not stop_event.is_set():
-            try:
-                discovered = await self.discovery.wait_for(self.slot.config, stop_event)
-                if discovered is None:
-                    break
-                log.info(
-                    "Connecting CodexMeter %s at %s via %s",
-                    label,
-                    discovered.address,
-                    discovered.source,
-                )
-                self.slot.state.last_discovered_at = discovered.seen_at
-                self.slot.state.last_discovery_source = discovered.source
-                self.slot.state.last_discovered_address = discovered.address
-                used = await self.transport.connect_and_write(
-                    discovered.device,
-                    self.slot.queue,
-                    self.slot.state,
-                    stop_event,
-                    require_identity=not self.slot.config.legacy,
-                    identity_validator=self._validate_identity,
-                )
-                if self.single_attempt:
-                    if not stop_event.is_set():
-                        self._record_failure("BLE disconnected; waiting for rediscovery")
-                    return
-                backoff = 1.0 if used else min(backoff * 2, 60.0)
-                if not stop_event.is_set():
-                    self._record_failure("BLE disconnected; waiting for rediscovery")
-                    await _sleep_or_stop(stop_event, _with_jitter(backoff))
-            except asyncio.CancelledError:
-                raise
-            except (
-                BleConnectTimeout,
-                BleWriteTimeout,
-                BleAckTimeout,
-                BleAckError,
-                BleNotifyError,
-                DeviceIdentityError,
-            ) as exc:
-                self._record_failure(str(exc))
-                if self.single_attempt:
-                    return
-                await _sleep_or_stop(stop_event, _with_jitter(backoff))
-                backoff = min(backoff * 2, 60.0)
-            except Exception as exc:
-                self._record_failure(str(exc) or "BLE worker error")
-                log.exception("BLE worker error for %s: %s", label, exc)
-                if self.single_attempt:
-                    return
-                await _sleep_or_stop(stop_event, _with_jitter(backoff))
-                backoff = min(backoff * 2, 60.0)
+        try:
+            discovered = self.discovery.find(self.slot.config)
+            if discovered is None or stop_event.is_set():
+                return
+            log.info("Connecting CodexMeter %s at %s via %s", self.slot.config.label,
+                     discovered.address, discovered.source)
+            self.slot.state.last_discovered_at = discovered.seen_at
+            self.slot.state.last_discovery_source = discovered.source
+            self.slot.state.last_discovered_address = discovered.address
+            await self.transport.connect_and_write(
+                discovered.device, self.slot.queue, self.slot.state, stop_event,
+                require_identity=not self.slot.config.legacy,
+                identity_validator=self._validate_identity)
+            if not stop_event.is_set():
+                self._record_failure("BLE disconnected; waiting for rediscovery")
+        except asyncio.CancelledError:
+            raise
+        except (BleConnectTimeout, BleWriteTimeout, BleAckTimeout, BleAckError,
+                BleNotifyError, DeviceIdentityError) as exc:
+            self._record_failure(str(exc))
+        except Exception as exc:
+            self._record_failure(str(exc) or "BLE worker error")
+            log.exception("BLE worker error for %s", self.slot.config.label)
 
     def _record_failure(self, error: str) -> None:
         state = self.slot.state
@@ -128,6 +94,3 @@ class DeviceWorker:
         if not identity.metadata.compatible:
             raise DeviceIdentityError(f"Unsupported display protocol {identity.metadata.protocol}; update the companion")
 
-
-def _with_jitter(seconds: float) -> float:
-    return seconds * random.uniform(0.8, 1.2)
