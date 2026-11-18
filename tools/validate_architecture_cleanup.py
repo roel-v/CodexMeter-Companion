@@ -16,9 +16,23 @@ from validate_usb_package import Fixture, IDS, PORTS, ROOT
 
 class CleanupFixture(Fixture):
     validation_mode = True
+    def command_result(self, index, command_id):
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            reply = self.event({'type':'command_result','device_id':IDS[index],'command_id':command_id})
+            assert reply['ok'], reply
+            result = reply['result']
+            if result and result['status'] not in ('queued','sending') and not result.get('readback_pending'):
+                return result
+            time.sleep(.1)
+        raise AssertionError('Command result did not settle')
+
     def control(self, index, command, value):
         result = self.event({'type':'device_control','device_id':IDS[index],'command':command,'value':value})
         assert result['ok'], result
+        outcome = self.command_result(index, result['command_id'])
+        assert outcome['status'] == 'applied', outcome
+        self.record(f'control_ack_{index}_{command}', result=outcome)
         key = 'manual_on' if command == 'screen' else command
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
@@ -27,6 +41,33 @@ class CleanupFixture(Fixture):
                 return
             time.sleep(.2)
         raise AssertionError(f'Control did not apply: {index} {command}={value}')
+
+    def conflict_checks(self):
+        """Race independent explicit requests against the same observed device revision."""
+        import asyncio
+        from codexmeter.ipc import send
+        for index in range(2):
+            self.mode(index, 'bluetooth_only')
+            self.wait({IDS[index]:'bluetooth'})
+            before = next(d['device_state'] for d in self.devices() if d['device_id']==IDS[index])
+            requests = [{'type':'device_control','device_id':IDS[index],'command':command,'value':value}
+                        for command,value in [('brightness',65 if before['brightness']!=65 else 66),
+                                              ('rotation',(before['rotation']+90)%360)]]
+            async def rapid():
+                return await asyncio.gather(*(send(request,self.app/'events.sock') for request in requests))
+            replies=asyncio.run(rapid())
+            outcomes=[self.command_result(index,r['command_id']) for r in replies]
+            self.record(f'rapid_results_{index}',all(r['status'] in ('applied','rejected','superseded') for r in outcomes),results=outcomes)
+            rejected = next(((request, reply, outcome) for request,reply,outcome in zip(requests,replies,outcomes)
+                             if outcome['status']=='rejected' and outcome['reason']=='conflict'), None)
+            self.record(f'revision_conflict_{index}',bool(rejected),results=outcomes)
+            request,reply,outcome = rejected
+            self.event({'type':'validation_payload','payload':{'v':1,'k':'activity','src':'codex','run':2,'wait':3,'done':4,'chats':True,'t':int(time.time())}})
+            time.sleep(.6)
+            self.record(f'conflict_survives_telemetry_{index}',self.command_result(index,reply['command_id'])['status']=='rejected')
+            self.control(index,request['command'],request['value'])
+            self.control(index,'rotation',before['rotation'])
+            self.mode(index,'auto');self.wait({IDS[index]:'usb'})
 
     def feed_capture(self, label, payloads, pages=False):
         from validation_capture import expected_model
@@ -105,6 +146,7 @@ class CleanupFixture(Fixture):
             for modes,wanted in [(('usb_only','bluetooth_only'),('usb','bluetooth')),(('bluetooth_only','usb_only'),('bluetooth','usb')),(('auto','auto'),('usb','usb'))]:
                 for i,mode in enumerate(modes):self.mode(i,mode)
                 _,rows=self.wait(dict(zip(IDS,wanted)));self.record('mixed_'+'_'.join(wanted),status=rows)
+            self.conflict_checks()
             for i in range(2):
                 for command,value in [('brightness',80),('rotation',90),('screen',False)]:
                     self.control(i, command, value)

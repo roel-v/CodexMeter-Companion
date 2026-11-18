@@ -2,8 +2,8 @@
 
 ## Scope and baseline
 
-Planning and implementation requested 18 November 2026. Phases 0–8 software work completed; final verification recorded in
-5_post-implementation-notes.md. Local installation/flashing and hardware acceptance are separate pending work.
+Planning and implementation requested 18 November 2026. Phases 0–8 and the subsequently authorized local deployment/hardware acceptance are complete.
+Final software and physical-board verification is recorded in 5_post-implementation-notes.md.
 Baseline: main at `1398e9a`, 423 passing Python cases. The second follow-up audit is preserved in the baseline commit:
 [findings and reproductions](../../../docs/code-audit-2026-11-18-second-follow-up.md).
 The preceding [completed follow-up](../../3_done/2026-11-18_audit-follow-up/1_exploration.md) remains historical evidence.

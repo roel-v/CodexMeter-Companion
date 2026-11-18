@@ -56,7 +56,7 @@ The four red cases passed after the fix; focused BLE/policy suite: 59 passed. Ad
 through actual initial/adopted/reloaded workers. Final full Python run: 497 passed, one inapplicable roots/account case
 skipped. The first successful candidate build predates the BLE correction; it is not the final tested candidate.
 
-## Phase 8 — integrated verification
+## Phase 8 â€” integrated verification
 
 - Final Python suite: 497 passed, 1 skipped in 64.28 seconds. The skip is the inapplicable roots/account test combination.
 - Canonical pytest and historical wrapper collect exactly the same 498 node IDs; wrapper exit-code regression passes.
@@ -91,3 +91,46 @@ macOS runtime behavior and fresh physical USB/BLE acceptance are not claimed. Or
 Installation, flashing, live five-minute freshness checks and visual captures belong to a separately authorized
 hardware-acceptance step. The work item stays in progress to retain that explicit pending gate; prior deployment
 acceptance is not reused for this candidate. No push or release was requested or performed.
+
+
+## Authorized hardware acceptance - 18 November 2026
+
+The subsequent user request explicitly authorized installation, both flashes and hardware checks. This completes the
+previously pending local gate; the earlier software-only acceptance above remains a historical record.
+
+- Installed the final verified onefile candidate at dist/windows/CodexMeter.exe (SHA-256 unchanged from above).
+  The login shortcut still targets that path with --daemon. Retained the previous executable as a rollback copy.
+- Verified each board identity (C6 COM6, Ball COM9), verified retained previous application images against live flash,
+  and retained those verified images before writing only the application partition at 0x10000. Both writes passed
+  esptool hash verification. Bootloaders, partitions and saved device settings were preserved.
+- Exact packaged companion, isolated profile: USB, Bluetooth and both mixed topologies; known/unknown/partial task
+  validity; totals-only and partial-cost pages; maintenance captures; command acknowledgements and settings readback;
+  rapid-command revision conflicts, persistence across unrelated telemetry and explicit retry; brightness, rotation
+  and power across handover; completion notification, waiting screen and reconnect after graceful shutdown/restart.
+- The initial matrix retained 45 passing observations and one invalid fixture assertion: raw serial gestures are
+  correctly fenced while BLE owns the device. Replaced that assumption with real competing IPC commands. The focused
+  repeated matrix passed all 46 observations, including conflicts and retries on both physical boards.
+- Reviewed current screenshots. Thirty USB/BLE metric-region comparisons matched; wrong totals, task counts, activity
+  timestamps and substituted unknown-task pixels were rejected. Nine content-validation regression tests passed.
+  An initial suspicion of clipped C6 text was withdrawn after reinspection of the original and repeated images;
+  no rendering defect was demonstrated. Final live captures on both boards agree on quota and task counts.
+- Direct physical protocol tests passed 183 checks per board, including 302-second data freshness with keep-alives,
+  USB/BLE ownership and reclaim, legacy fencing, settings/manual-power preservation, alert deduplication, and 15-byte
+  BLE logical fragments (actual negotiated MTU 256). Keep-alives did not prevent the waiting screen after data expired.
+- Source-side real serial-boundary fault injection passed on both boards: failure detection 2.34/2.27 seconds,
+  acknowledged Bluetooth recovery a further 5.38/5.34 seconds, return to USB 5.34/4.75 seconds. No board reboot,
+  settings loss or peer starvation. These are actual board ACKs but source fixture failures, not cable removal or
+  injected failures inside the packaged companion; packaged mode switching was checked separately above.
+- The first fault run hit WinError 5 while replacing its registry file in the retained-evidence directory. Its retry
+  inherited a maintenance marker from that test copy. Preserved both failures; a fresh working registry on D: passed.
+  The production registry was separate and unchanged. Do not reuse deployment/devices.before.json as pristine input:
+  this test modified that copy; deployment/before.json retains the original status/settings evidence.
+- Installed-app tray, repeat activation into one control panel, panel close-to-tray and continued bridge operation passed.
+  Final normal-mode status: both USB-connected, ACK ages 0.6/0.7 seconds, no device errors or maintenance leases.
+  C6 brightness 70/auto-rotation on and Ball brightness 60/auto-rotation off restored; both rotation/page 0 and powered on.
+- Evidence, rollback binaries, logs and captures remain ignored under
+  dist/windows/validation/audit-reliability-cleanup-20261118; active profiles/scratch stayed on D:.
+
+Limits: no new human finger/BOOT check, physical cable-unplug, PC sleep/resume, other-machine or overnight soak test.
+Automated page gestures and rotation/control paths were exercised; original S3 remains compile-only. No production
+code changed during deployment, no version bump, and no push/release. All agreed automated local acceptance gates pass.
