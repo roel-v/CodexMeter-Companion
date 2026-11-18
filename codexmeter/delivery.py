@@ -208,3 +208,9 @@ def discard_intents(state: DeliveryState, payloads):
         command = payload.data.get("cmd")
         if state.desired_settings.get(command) is payload:
             state.desired_settings.pop(command, None)
+
+
+def telemetry_fresh(payload: Payload, state: DeliveryState, *, now=None) -> bool:
+    now = time.monotonic() if now is None else now
+    return (payload.kind in ("usage", "activity") and
+            now - state.observed_at.get(payload.kind, float("-inf")) < TELEMETRY_REPLAY_TTL_SEC)

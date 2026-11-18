@@ -100,3 +100,34 @@ def test_cli_screen_routes_target_and_partial_exit(monkeypatch,capsys):
     monkeypatch.setattr('codexmeter.cli.send_event',send)
     assert asyncio.run(run_screen(SimpleNamespace(on=False,reason='manual',device_id=None)))==1
     assert 'disconnected' in capsys.readouterr().out
+
+@pytest.mark.parametrize('trigger',['reconnect','refresh','health'])
+def test_legacy_consumers_do_not_refresh_expired_usage(trigger):
+    from codexmeter.ble import BleTransport
+    from codexmeter.delivery import remember_desired
+    async def run():
+        stop=asyncio.Event();writes=[]
+        class Client:
+            is_connected=False
+            async def connect(self): self.is_connected=True
+            async def disconnect(self): self.is_connected=False
+            async def start_notify(self,char,callback):
+                from codexmeter.settings import REQ_CHAR_UUID, TX_CHAR_UUID
+                if char==TX_CHAR_UUID: self.ack=callback
+                if trigger=='refresh' and char==REQ_CHAR_UUID: callback(None,b'R')
+            async def write_gatt_char(self,char,data,**k):
+                writes.append(data);self.ack(None,b'{"ack":true}')
+        class Transport(BleTransport):
+            def _create_client(self,target): return Client()
+            async def _write_payload(self,client,payload,*args):
+                # Keep the real filtering boundary, replace only actual GATT serialization below it.
+                return await super()._write_payload(client,payload,*args)
+        state=DeliveryState();p=Payload('usage',{'k':'usage'})
+        remember_desired(p,state);state.observed_at['usage']=time.monotonic()-3600
+        transport=Transport(healthcheck_interval_sec=.01)
+        task=asyncio.create_task(transport.connect_and_write(object(),asyncio.Queue(),state,stop))
+        await asyncio.sleep(.04)
+        stop.set()
+        await task
+        assert writes==[]
+    asyncio.run(run())

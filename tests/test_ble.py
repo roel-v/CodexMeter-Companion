@@ -201,6 +201,7 @@ def test_ble_write_payload_rejects_device_nack_without_clearing_failure_state():
         tracker = BleAckTracker()
         state = DeliveryState(consecutive_failures=2, last_error="previous")
         payload = build_activity_payload(1, now=1)
+        remember_desired(payload, state)
 
         async def notify_nack() -> None:
             await asyncio.sleep(0)

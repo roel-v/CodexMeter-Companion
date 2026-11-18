@@ -139,7 +139,7 @@ class BleAckTracker:
 
 
 from .delivery import DeliveryState
-from .delivery import remember_accepted, should_send
+from .delivery import remember_accepted, should_send, telemetry_fresh
 
 
 class BleTransport:
@@ -255,14 +255,10 @@ class BleTransport:
             state.last_error = None
 
             try:
-                reconnect_control = state.desired_control or state.connect_control
-                if reconnect_control is not None and should_send(
-                    reconnect_control, state
-                ):
-                    await self._write_payload(
-                        client, reconnect_control, ack_tracker, state
-                    )
-                    used_successfully = True
+                for reconnect_control in (state.desired_control, state.desired_policy or state.connect_control):
+                    if reconnect_control is not None and should_send(reconnect_control, state):
+                        await self._write_payload(client, reconnect_control, ack_tracker, state)
+                        used_successfully = True
                 for setting in list(state.desired_settings.values()):
                     await self._write_payload(client, setting, ack_tracker, state)
                 if state.last_usage is not None:
@@ -319,14 +315,14 @@ class BleTransport:
                         continue
                     if refresh_task in done and refresh_requested.is_set():
                         refresh_requested.clear()
-                        if state.last_usage is not None:
-                            await self._write_payload(
-                                client, state.last_usage, ack_tracker, state
-                            )
-                            used_successfully = True
+                        for snapshot in (state.last_usage, state.last_activity):
+                            if snapshot is not None and telemetry_fresh(snapshot, state):
+                                await self._write_payload(client, snapshot, ack_tracker, state)
+                                used_successfully = True
                         continue
                     if health_task in done:
-                        heartbeat = state.last_usage or state.last_activity
+                        heartbeat = next((p for p in (state.last_usage, state.last_activity)
+                                          if p is not None and telemetry_fresh(p, state)), None)
                         if heartbeat is not None:
                             log.info("BLE health check with %s payload", heartbeat.kind)
                             await self._write_payload(client, heartbeat, ack_tracker, state)
@@ -408,6 +404,8 @@ class BleTransport:
         ack_tracker: BleAckTracker | None = None,
         state: DeliveryState | None = None,
     ) -> None:
+        if state is not None and payload.kind in ("usage", "activity") and not telemetry_fresh(payload, state):
+            return
         # Only the legacy wire adapter translates historical policy reason names.
         wire_payload = payload
         if payload.kind == "control" and payload.data.get("cmd") == "screen":

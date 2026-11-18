@@ -11,3 +11,10 @@ acquisition, preserving bounded resolution for an already-written transaction.
 
 Validation: initial three regressions failed on the baseline. Focused transport/events suite: 58 passed;
 expanded follow-up tests: 8 passed. No live hardware or process changes yet.
+
+## Phase 2
+
+Legacy GATT writes now enforce the shared producer-observation freshness predicate for reconnect, queued, refresh
+and health-check telemetry. Refresh handles usage/activity independently; health checks choose a fresh sample or
+send no synthetic telemetry. Legacy reconnect restores manual and policy state independently.
+Validation: three real connection-path fake-GATT regressions failed before the fix; 34 focused tests now pass.

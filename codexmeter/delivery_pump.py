@@ -1,7 +1,7 @@
 """Shared replay and delivery semantics for negotiated display sessions."""
 import time
 from .transport_types import TransportSession, TransportError
-from .delivery import EXPLICIT_INTENT_TTL_SEC, TELEMETRY_REPLAY_TTL_SEC, remember_accepted, should_send, accepted_alert, prune_alerts
+from .delivery import EXPLICIT_INTENT_TTL_SEC, telemetry_fresh, remember_accepted, should_send, accepted_alert, prune_alerts
 from .payloads import Payload
 
 
@@ -13,10 +13,7 @@ class DeliveryPump:
     async def deliver(self, payload):
         state = self.state
         if payload.kind in ("usage", "activity"):
-            if (
-                time.monotonic() - state.observed_at.get(payload.kind, float("-inf"))
-                >= TELEMETRY_REPLAY_TTL_SEC
-            ):
+            if not telemetry_fresh(payload, state):
                 return
             if not should_send(payload, state):
                 return
