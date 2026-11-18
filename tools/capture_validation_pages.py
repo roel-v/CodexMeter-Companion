@@ -14,11 +14,18 @@ def run(args):
         if args.c6:
             from capture_c6_screen import capture
             with SerialSession(args.port) as serial:
-                capture(serial,args.output/'page-0.png')
-                serial.write_line('test_swipe');time.sleep(.3)
-                serial.write_line('test_tap_today');time.sleep(.3);capture(serial,args.output/'page-1.png')
-                serial.write_line('test_tap_week');time.sleep(.3);capture(serial,args.output/'page-2.png')
-                serial.write_line('test_swipe');time.sleep(.3)
+                on_details = False
+                try:
+                    capture(serial,args.output/'page-0.png')
+                    serial.write_line('test_swipe');on_details = True;time.sleep(.3)
+                    serial.write_line('test_tap_today');time.sleep(.3);capture(serial,args.output/'page-1.png')
+                    serial.write_line('test_tap_week');time.sleep(.3);capture(serial,args.output/'page-2.png')
+                finally:
+                    if on_details:
+                        # Also restore after a rejected/incomplete image transfer.
+                        time.sleep(1)
+                        serial.write_line('test_swipe');time.sleep(.3)
+
         else:
             from capture_screenshot import capture_rgb565le,rgb565le_to_png
             for page in range(3):
