@@ -618,3 +618,36 @@ def test_four_device_workers_one_unanswered_ack_does_not_block_peers(monkeypatch
         assert time.monotonic() - started < 2 and all(c.closed for c in channels)
 
     asyncio.run(run())
+
+
+def test_maintenance_pause_waits_for_cancelled_native_probe_cleanup():
+    started, release = threading.Event(), threading.Event()
+    fake = FakeSerial()
+
+    def opening():
+        started.set()
+        release.wait(2)
+        fake.opened = True
+
+    fake.open = opening
+
+    async def run():
+        discovery = UsbDiscovery(channel_factory=lambda port: SerialChannel(port, factory=lambda: fake))
+        probe = asyncio.create_task(discovery._probe(UsbCandidate("pause-native", "instance")))
+        while not started.is_set():
+            await asyncio.sleep(.01)
+        pause = asyncio.create_task(discovery.pause("pause-native", ID, "instance"))
+        await asyncio.sleep(.03)
+        assert not pause.done()
+        release.set()
+        await asyncio.wait_for(pause, 1)
+        assert probe.done() and fake.closed
+        # The port can immediately be reopened after the pause grant.
+        peer = SerialChannel("pause-native", factory=FakeSerial)
+        await peer.open()
+        await peer.close()
+
+    try:
+        asyncio.run(run())
+    finally:
+        release.set()

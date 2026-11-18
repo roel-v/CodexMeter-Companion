@@ -403,6 +403,17 @@ class UsbDiscovery:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+            # Cancelling the coroutine does not cancel a native open/close.
+            # Its admission key stays held until late handle cleanup finishes.
+            deadline = asyncio.get_running_loop().time() + 1.5
+            while True:
+                with _OPERATION_LOCK:
+                    pending = any((kind, port) in _OPERATION_KEYS for kind in ("io", "close"))
+                if not pending:
+                    break
+                if asyncio.get_running_loop().time() >= deadline:
+                    raise TransportError("USB probe cleanup pending; maintenance pause retained")
+                await asyncio.sleep(.01)
 
     async def _probe(self, candidate):
         key = candidate.instance_id

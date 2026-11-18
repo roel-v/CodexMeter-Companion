@@ -153,3 +153,13 @@ cancellable. Shield the bounded disconnect and await it before propagating cance
 reuse the endpoint while cleanup is unfinished. Regression validation: 42 BLE/coordinator tests passed, including
 cancellation injected after native disconnect starts. Both failed hardware runs restored settings and production;
 the corrected package must pass the affected matrix before acceptance.
+
+### Native USB probe cleanup before maintenance
+
+The next detail capture was safely refused with 'serial operation already pending': cancelling an asynchronous
+USB probe can finish before its native open worker disposes the late handle. UsbDiscovery.pause now waits up to
+1.5 seconds for that cancelled probe's native admission keys to clear; timeout retains the pause and refuses access.
+It does not wait on unrelated ports or bypass port exclusivity. Validation: 37 USB/coordinator tests passed,
+including cancellation during native open, verified handle disposal and immediate reopening after pause returns.
+A separate rejected C6 screenshot CRC exposed missing capture-tool page cleanup; the tool now restores overview
+in finally, with a regression test. Rejected images remain failures, and failed runs remain retained.
