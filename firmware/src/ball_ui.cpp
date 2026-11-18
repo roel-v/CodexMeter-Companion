@@ -1,3 +1,4 @@
+#include "token_view_model.h"
 #include "config.h"
 #ifdef CODEXMETER_BOARD_BALL
 #include <lvgl.h>
@@ -55,11 +56,6 @@ void cost_text(char* out,size_t size,uint64_t cents,bool valid,bool partial) {
     snprintf(out,size,"$%s%s",number,partial?"+":"");
   }
 }
-bool sum3(const uint64_t* values,uint64_t& sum) {
-  sum=0;
-  for(int i=0;i<3;++i) { if(UINT64_MAX-sum<values[i]) return false; sum+=values[i]; }
-  return true;
-}
 void refresh() {
   const auto m=build_dashboard_view_model(usage,activity,-1,false,millis());
   lv_label_set_text(percent,m.usage_valid?m.d7_percent_text:"--%");
@@ -78,15 +74,13 @@ void refresh() {
   for(auto* dot:status) lv_obj_set_style_text_color(dot,lv_color_hex(color),0);
   for(int w=0;w<2;++w) {
     const auto& b=m.breakdown[w];
-    uint64_t sum=0; bool sum_ok=sum3(b.cents,sum);
     for(int row=0;row<4;++row) {
       char text[32];
-      bool valid=row==0?(w?m.has_last_7d_tokens:m.has_today_tokens):b.valid;
-      uint64_t n=row==0?(w?m.last_7d_tokens:m.today_tokens):b.tokens[row-1];
-      format_compact_tokens(text,sizeof(text),valid,n,w==1);
+      const auto value=token_display_row(b,row==0?3:row-1,
+          w?m.has_last_7d_tokens:m.has_today_tokens,w?m.last_7d_tokens:m.today_tokens);
+      format_compact_tokens(text,sizeof(text),value.has_tokens,value.tokens,w==1);
       lv_label_set_text(tokens[w][row],text);
-      cost_text(text,sizeof(text),row==0?sum:b.cents[row-1],
-                b.valid && (row!=0 || sum_ok),b.partial || b.unknown);
+      cost_text(text,sizeof(text),value.cents,value.has_cost,value.partial);
       lv_label_set_text(costs[w][row],text);
     }
     const char* note=!b.valid?"Breakdown unavailable":

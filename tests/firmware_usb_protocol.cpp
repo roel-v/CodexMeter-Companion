@@ -2,6 +2,7 @@
 #include "companion_protocol.h"
 #include "wire_json.h"
 #include "model.h"
+#include "token_view_model.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -33,6 +34,19 @@ static std::string dispatch(Protocol& p,const std::string& s,uint32_t at=100,End
 }
 static void contains(const std::string& s,const char* expected){if(s.find(expected)==std::string::npos){fprintf(stderr,"Expected %s, got %s\n",expected,s.c_str());abort();}}
 int main() {
+  {
+    TokenBreakdown b;
+    auto total=token_display_row(b,3,true,123);
+    assert(total.has_tokens && total.tokens==123 && !total.has_cost);
+    assert(!token_display_row(b,0,true,123).has_tokens);
+    b.valid=true;b.unknown=true;b.cents[0]=1;b.cents[1]=2;b.cents[2]=3;
+    total=token_display_row(b,3,false,0);
+    assert(!total.has_tokens && total.has_cost && total.cents==6 && total.partial);
+    b.cents[0]=UINT64_MAX;
+    assert(!token_display_row(b,3,true,123).has_cost);
+    assert(token_display_row(b,0,true,123).has_cost);
+  }
+
 
   {
     UsageModel usage; AlertModel alert; ActivityModel activity; ControlModel control;

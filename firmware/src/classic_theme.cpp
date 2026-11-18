@@ -1,3 +1,4 @@
+#include "token_view_model.h"
 #include "classic_theme.h"
 
 #include "theme_text_fit.h"
@@ -347,7 +348,9 @@ void update_details(ClassicThemeState* state, const DashboardViewModel& model) {
   for (int w = 0; w < 2; ++w) {
     const auto& b = model.breakdown[w];
     char cost[32], summary[40];
-    format_cost(cost, sizeof(cost), b.cents[0] + b.cents[1] + b.cents[2], b.valid, b.partial);
+    const auto total = token_display_row(b, 3, w ? model.has_last_7d_tokens : model.has_today_tokens,
+        w ? model.last_7d_tokens : model.today_tokens);
+    format_cost(cost, sizeof(cost), total.cents, total.has_cost, total.partial);
     snprintf(summary, sizeof(summary), "API est. %s", cost);
     lv_label_set_text(state->summary_costs[w], summary);
     if (model.detail_page) lv_obj_add_flag(state->panels[w], LV_OBJ_FLAG_HIDDEN);
@@ -360,12 +363,13 @@ void update_details(ClassicThemeState* state, const DashboardViewModel& model) {
   const auto& b = model.breakdown[model.detail_week ? 1 : 0];
   for (int i = 0; i < 4; ++i) {
     char text[32];
-    uint64_t tokens = i < 3 ? b.tokens[i] : (model.detail_week ? model.last_7d_tokens : model.today_tokens);
-    uint64_t cents = i < 3 ? b.cents[i] : b.cents[0] + b.cents[1] + b.cents[2];
-    if (b.valid) format_compact_tokens(text, sizeof(text), true, tokens, true);
+    const auto row = token_display_row(b, i,
+        model.detail_week ? model.has_last_7d_tokens : model.has_today_tokens,
+        model.detail_week ? model.last_7d_tokens : model.today_tokens);
+    if (row.has_tokens) format_compact_tokens(text, sizeof(text), true, row.tokens, true);
     else strlcpy(text, "--", sizeof(text));
     lv_label_set_text(state->detail_tokens[i], text);
-    format_cost(text, sizeof(text), cents, b.valid, b.partial);
+    format_cost(text, sizeof(text), row.cents, row.has_cost, row.partial);
     lv_label_set_text(state->detail_costs[i], text);
   }
   lv_label_set_text(state->detail_note, !b.valid ? "Waiting for token breakdown" :
