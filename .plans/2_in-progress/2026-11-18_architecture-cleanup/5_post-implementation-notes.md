@@ -35,3 +35,7 @@ to the asyncio loop and unregistered at shutdown. Duplicate resume events do not
 The long-gap heuristic is now fallback-only. No sleep-prevention or physical sleep was triggered.
 Validation: 25 power/compatibility tests passed, including actual Windows registration/unregistration
 and simulated short/long suspend, resume grace, cancellation and late callback fencing.
+
+Phase 3 follow-up: empty-root success now originates only from a fresh inventory read, not
+the publication timer. Actual observer-loop regression verifies the first publication preserves
+the incident until the next source read. Chat/compatibility integration tests passed.

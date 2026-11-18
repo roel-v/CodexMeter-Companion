@@ -212,6 +212,8 @@ class ChatActivity:
                         roots = await asyncio.to_thread(read_roots, self.home)
                         if self.monitor:
                             self.monitor.observe("inventory")
+                            if not roots:
+                                self.monitor.observe("stream")
                     except Exception as exc:
                         report_error(self.monitor, "inventory", exc)
                         raise
@@ -319,8 +321,6 @@ class ChatActivity:
                         evidence_changed = False
                     if self.monitor and not complete:
                         self.monitor.observe("stream", "unavailable", "incomplete")
-                    if self.monitor and not roots:
-                        self.monitor.observe("stream")
                     stream_ok = complete and (self.monitor is None or
                         self.monitor.records["stream"].state == "compatible")
                     self.payload = self._payload(stream_ok, count_chats(roots, done, states))

@@ -136,3 +136,46 @@ def test_unresolved_evidence_survives_closed_restart(tmp_path):
     assert n.records['stream'].incident_details == {'observed_version':14}
     n.observe('stream'); n.observe('stream')
     assert not CompatibilityMonitor(path,clock=c,wall=c,components=['stream']).records['stream'].incident
+
+
+def test_empty_inventory_recovery_requires_fresh_reads(monkeypatch):
+    from codexmeter import chat_activity as activity
+    from tests.test_compatibility import Clock
+    async def run():
+        clock = Clock(); stop = asyncio.Event()
+        monitor = CompatibilityMonitor(clock=clock, wall=clock)
+        monitor.observe("stream", "incompatible", "structure", definitive=True)
+        class Transport:
+            def write(self, raw): self.request = json.loads(raw[4:])["requestId"]
+            def close(self): pass
+        transport = Transport()
+        async def connect(*args): return transport, None
+        loop = asyncio.get_running_loop()
+        monkeypatch.setattr(loop, "create_pipe_connection", connect, raising=False)
+        received = False
+        async def receive(reader):
+            nonlocal received
+            if not received:
+                received = True
+                return {"requestId": transport.request, "result": {"clientId": "test"}}
+            await asyncio.Future()
+        monkeypatch.setattr(activity, "receive_metadata", receive)
+        monkeypatch.setattr(activity.time, "monotonic", clock)
+        reads = []
+        def roots(home): reads.append(clock.now); return set()
+        monkeypatch.setattr(activity, "read_roots", roots)
+        monkeypatch.setattr(activity, "read_unread", lambda *args: set())
+        async def wait(tasks, timeout):
+            clock.now += 1
+            await asyncio.sleep(0)
+            return set(), tasks
+        monkeypatch.setattr(activity.asyncio, "wait", wait)
+        publications = []
+        async def sink(payload):
+            publications.append((len(reads), monitor.records["stream"].successes,
+                                 bool(monitor.records["stream"].incident)))
+            if clock.now >= 7: stop.set()
+        await activity.ChatActivity(monitor=monitor)._observe(sink, stop)
+        assert publications[0] == (1, 1, True)
+        assert publications[-1] == (2, 2, False)
+    asyncio.run(run())
