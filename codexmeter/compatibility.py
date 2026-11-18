@@ -64,6 +64,7 @@ class CompatibilityMonitor:
         self.started = self.last_tick = clock()
         self.grace_until = self.started + 30
         self.suspended = False
+        self.power_events_available = False
         self.host_running = None
         self.notified = {}
         self.versions = {}
@@ -175,7 +176,7 @@ class CompatibilityMonitor:
         now = self.clock()
         delta = max(0, now - max(self.last_tick, self.grace_until))
         # A stopped event loop/sleep cannot charge hours to an outage timer.
-        if now - self.last_tick > 30:
+        if not self.power_events_available and now - self.last_tick > 30:
             self.grace_until = now + 30
             delta = 0
         self.last_tick = now

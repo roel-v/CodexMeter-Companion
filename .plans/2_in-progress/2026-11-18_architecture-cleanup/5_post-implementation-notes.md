@@ -27,3 +27,11 @@ its firmware/application versions and dimensions; original S3 no longer claims t
 USB recognizes the retained S3 target. Identity output is bounded on every board.
 Validation: 82 focused identity/BLE/USB/multi-display tests passed. Full board compilation remains
 part of the final firmware build gate; no firmware has been installed during these edits.
+
+## Phase 3 — Service power lifecycle
+
+Added window-independent PowrProf notifications owned by the daemon service. Callbacks are fenced
+to the asyncio loop and unregistered at shutdown. Duplicate resume events do not extend grace.
+The long-gap heuristic is now fallback-only. No sleep-prevention or physical sleep was triggered.
+Validation: 25 power/compatibility tests passed, including actual Windows registration/unregistration
+and simulated short/long suspend, resume grace, cancellation and late callback fencing.

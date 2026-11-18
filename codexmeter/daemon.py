@@ -392,6 +392,8 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             status["tray"] = desktop.snapshot
         return status
 
+    from .power_events import power_event_loop
+
     async def compatibility_loop():
         from .compatibility_versions import local_versions
         next_versions = 0
@@ -439,6 +441,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             **({"chat_activity": chats.run(manager.broadcast, stop_event)} if chats else {}),
             **({"tray_status": tray_status_loop()} if desktop is not None else {}),
             "compatibility": compatibility_loop(),
+            "power_events": power_event_loop(monitor, stop_event),
             "events": event_server.run(stop_event),
             "quota": quota_loop(provider, sink, stop_event, args.poll_interval),
             "pricing": pricing_monitor_loop(stop_event, desktop),
