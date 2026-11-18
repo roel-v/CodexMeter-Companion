@@ -55,3 +55,39 @@ The adapter now routes any negotiation declaration through strict support valida
 The four red cases passed after the fix; focused BLE/policy suite: 59 passed. Added lazy/cached host identity coverage
 through actual initial/adopted/reloaded workers. Final full Python run: 497 passed, one inapplicable roots/account case
 skipped. The first successful candidate build predates the BLE correction; it is not the final tested candidate.
+
+## Phase 8 — integrated verification
+
+- Final Python suite: 497 passed, 1 skipped in 64.28 seconds. The skip is the inapplicable roots/account test combination.
+- Canonical pytest and historical wrapper collect exactly the same 498 node IDs; wrapper exit-code regression passes.
+- Native firmware protocol/model tests, parser limits (640/512 and 320/128), and real theme-header helper tests passed.
+- All three firmware builds passed. Relative to the previous capture-fix build:
+
+| Board | RAM bytes | Flash bytes | RAM delta | Flash delta |
+| --- | ---: | ---: | ---: | ---: |
+| Original S3 | 127304 | 1644887 | 0 | -228 |
+| C6 | 54620 | 2416660 | 0 | -324 |
+| Ball | 190784 | 1216686 | 0 | 0 |
+
+- Final Nuitka 4.3.1 onefile candidate built from production source at a4b15e7. Version remains 3.12.3.4 as planned.
+- Isolated packaged self-test passed with Python removed from PATH: actual Tk command outcomes/retry/readback,
+  compatibility recovery, pricing/update panels, DPAPI, WinRT imports, CLI subprocess, native tray and clean quit.
+- PowerShell initially returned before the GUI executable completed; its subsequently written JSON confirms compiled=true
+  and ok=true. The test process exited naturally. No production daemon was started, stopped or reconfigured.
+- No pytest/_pytest module is included in the compilation report. Runtime dependencies remain separate from the test extra.
+- Final reference search finds no removed wait_any/exclusive_delivery/used_successfully/discovery-event scaffolding;
+  label/font helper definitions occur only in the shared header.
+- Active build/cache/compiler outputs stayed on D:, with 97.3 GB free before and 96.5 GB after the builds.
+  Inventoried old test profiles and build directories; sufficient space meant no cold-data relocation was necessary.
+- Retained artifacts/logs/compilation report/manifest are ignored under
+  dist/windows/validation/audit-reliability-cleanup-20261118. The manifest hashes every retained executable/bin artifact.
+  Final executable SHA-256: 70c7c9a4fbae853c1231c6d6d6da26dc8f67fa4e3f74d3b53f81d13dfb5402bd.
+
+## Scope and remaining acceptance
+
+All implementation and software/build checks were performed personally, without agents. CHANGELOG and architecture,
+contributor and audit-disposition documentation are updated. Tests exercise fake transport/OS boundaries on Windows;
+macOS runtime behavior and fresh physical USB/BLE acceptance are not claimed. Original S3 remains compile-only.
+Installation, flashing, live five-minute freshness checks and visual captures belong to a separately authorized
+hardware-acceptance step. The work item stays in progress to retain that explicit pending gate; prior deployment
+acceptance is not reused for this candidate. No push or release was requested or performed.

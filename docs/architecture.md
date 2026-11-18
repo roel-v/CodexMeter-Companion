@@ -97,4 +97,3 @@ not the companion application protocol. A partial write cannot silently advance 
 USB and Bluetooth adapters own discovery and physical I/O. session_runner owns reconciliation, replay, queue delivery and logical session cleanup. DeviceManager supplies one lazily resolved host identity to every adapter.
 
 companion_protocol validates wire structure; device_policy separately enforces supported application/wire versions and the three reviewed models. Adding a syntactically valid model does not grant support. USB and Bluetooth check this policy before ownership claims. Controls require the advertised capability; a telemetry-only device need not advertise brightness or rotation. Legacy handling stays at the adapter boundary. Busy ownership classification is shared by retry, failure accounting and recovery filtering.
-

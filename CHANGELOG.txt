@@ -4,6 +4,13 @@ Entries are grouped by release date, newest first. Application versions are
 recorded separately; firmware changes are noted where applicable.
 
 2026-11-18 — unreleased compatibility and architecture cleanup (Windows and firmware 3.12.3.4)
+- Report per-display command outcomes from acknowledgements, retain failures across telemetry updates,
+  and offer an explicit settings check/retry for conflicts or uncertain delivery.
+- Close metadata databases deterministically and bound screenshot header searches across noisy serial output.
+- Repair the contributor test runner and document its test dependencies.
+- Share negotiated USB/Bluetooth lifecycle and host identity; separate reviewed device support from wire parsing.
+- Reject malformed Bluetooth ownership declarations without falling back to legacy communication.
+- Remove obsolete discovery scaffolding and share identical theme label/font helpers without changing layouts.
 - Fix per-display manual control admission, separate lock policy from manual state, and expire stale unsent commands.
 - Prevent stale legacy Bluetooth telemetry replay; serialize maintenance with connection cleanup.
 - Keep retries in the coordinator and enforce declared firmware parser limits with native boundary tests.

@@ -158,3 +158,21 @@ architecture rewrite.
 This audit did not rebuild/install/flash, run live controls, access private chat content or repeat hardware acceptance.
 The previous deployment evidence remains separate. New reproductions are isolated. No implementation, plan, commit,
 push or release was made; only this report was added to tracked-source territory, with ignored audit evidence retained.
+
+## Remediation — 18 November 2026
+
+The original findings above remain the audit baseline. The subsequent reliability-cleanup implementation addresses:
+
+| Finding | Change | Verification |
+| --- | --- | --- |
+| 1 | Bounded command ledger, ACK-based results, explicit refresh/retry and selected-device fencing | Real session/IPC and Tk tests; packaged widget diagnostic |
+| 2 | Closing context manager for each read-only SQLite connection | Both readers tested with GC disabled and deterministic close tracking |
+| 3 | One total screenshot-header deadline | Noisy/blank streams, deadline boundaries, failure markers and capture cleanup |
+| 4 | Pytest entry point, test extra and contributor instructions | Clean environment, failing-test exit status and collection parity |
+| 5 | Shared session runner and manager-owned host identity; separate support policy | Adapter failure/cancellation and dynamic-worker tests; unsupported identity rejection |
+| 6 | Removed unused discovery waits/events, success bookkeeping and test-only API | Reference inventory and existing discovery/maintenance/expiry regressions |
+| 7 | Shared busy/application policy, transport options and theme helpers | Consumer tests, native helper tests and all three board builds |
+
+Final review also corrected terminal-result polling while readback is pending and rejected malformed BLE ownership
+declarations before any legacy fallback. See the plan's post-implementation notes for exact counts, build results and
+retained evidence. No installation, flashing or new hardware acceptance is implied by these software checks.
