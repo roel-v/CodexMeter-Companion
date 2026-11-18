@@ -169,8 +169,15 @@ class MeterApp:
             def read_health():
                 try:
                     from .events import send_event
-                    reply = asyncio.run(send_event({"type": "ping"}))
-                    self.compatibility_results.put(reply.get("compatibility", reply.get("status", {}).get("compatibility", {})))
+                    reply = asyncio.run(asyncio.wait_for(send_event({"type": "ping"}), timeout=3))
+                    snapshot = reply.get("compatibility", {}) if isinstance(reply, dict) else {}
+                    rows = snapshot.get("components") if isinstance(snapshot, dict) else None
+                    if not isinstance(rows, dict) or not all(
+                        isinstance(row, dict) and isinstance(row.get("label"), str)
+                        for row in rows.values()
+                    ):
+                        snapshot = {}
+                    self.compatibility_results.put(snapshot)
                 except Exception:
                     self.compatibility_results.put({})
             threading.Thread(target=read_health, daemon=True).start()
