@@ -13,8 +13,17 @@ def check_panel(root, app):
              (OSError("controlled offline fixture"), "Checking Codex data compatibility…"),
              (healthy, "Codex readings are available.")]
     try:
+        # Construction can start a real poll before the fixture owns send_event.
+        deadline = time.monotonic() + 5
+        while app.compatibility_polling and time.monotonic() < deadline:
+            root.update()
+            time.sleep(.02)
+        assert not app.compatibility_polling, "Initial panel health worker stalled"
         for snapshot, expected in cases:
+            served = False
             async def send(event):
+                nonlocal served
+                served = True
                 assert event == {"type": "ping"}
                 if isinstance(snapshot, Exception):
                     raise snapshot
@@ -25,9 +34,10 @@ def check_panel(root, app):
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
                 root.update()
-                if app.pricing_poll_count > 1 and not app.compatibility_polling:
+                if served and not app.compatibility_polling:
                     break
                 time.sleep(.02)
+            assert served, "Panel did not request the fixture snapshot"
             assert not app.compatibility_polling, "Standalone-panel health worker stalled"
             assert app.compatibility_text.get() == expected, app.compatibility_text.get()
         from .compatibility_dialog import show_compatibility
