@@ -1,4 +1,4 @@
-"""Windows tray and control panel, with the BLE asyncio loop on its own thread."""
+"""Windows tray and control panel, with companion transports on an asyncio thread."""
 from __future__ import annotations
 
 import logging
@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 
 def connection_display(status: dict) -> tuple[str, str]:
-    devices = status.get("devices", [])
+    devices = [d for d in status.get("devices", []) if d.get("enabled", True)]
     total = status.get("configured_count", len(devices))
     connected = sum(bool(device.get("connected")) for device in devices)
     if not total:
@@ -17,6 +17,10 @@ def connection_display(status: dict) -> tuple[str, str]:
     if connected == total:
         label = devices[0].get("label", "Display") if total == 1 else f"{connected} displays"
         return f"Connected: {label}", "green"
+    if devices and all(d.get('maintenance') or d.get('connection_state') == 'maintenance' for d in devices):
+        return "Displays paused for maintenance", "gray"
+    if devices and all(d.get('connection_state') == 'owned_elsewhere' for d in devices):
+        return "Displays in use elsewhere", "amber"
     if connected:
         return f"Connected: {connected} of {total} displays", "amber"
     return "Display disconnected — reconnecting", "amber"
@@ -54,6 +58,8 @@ class WindowsTray:
         self.pricing_dialog = None
         self.update_dialog = None
         self.notification_dialog = None
+        self.compatibility_dialog = None
+        self.compatibility_status = {}
 
     def bind_shutdown(self, callback: Callable[[], None]):
         self.shutdown = callback
@@ -72,6 +78,16 @@ class WindowsTray:
     def open_updates(self):
         self.commands.put(("updates", None))
 
+    def open_compatibility(self):
+        self.commands.put(("compatibility", None))
+
+    def _show_compatibility(self):
+        from .compatibility_dialog import show_compatibility
+        if self.compatibility_dialog is not None and self.compatibility_dialog.winfo_exists():
+            self.compatibility_dialog.lift()
+        else:
+            self.compatibility_dialog = show_compatibility(self.root, lambda: self.compatibility_status)
+
     def open_notifications(self):
         self.commands.put(("notifications", None))
 
@@ -87,7 +103,8 @@ class WindowsTray:
         from .update_dialog import show_notifications
         if self.notification_dialog is not None and self.notification_dialog.winfo_exists():
             self.notification_dialog.destroy()
-        self.notification_dialog = show_notifications(self.root, self.open_pricing_notice, self.open_updates)
+        self.notification_dialog = show_notifications(self.root, self.open_pricing_notice, self.open_updates,
+            compatibility=self.open_compatibility, snapshot=self.compatibility_status)
 
     def _show_pricing_notice(self):
         if self.quit_requested:
@@ -123,6 +140,8 @@ class WindowsTray:
         if self.app is None:
             from .windows_app import MeterApp
             self.app = MeterApp(self.root, tray_managed=True)
+            self.app.compatibility_snapshot = self.compatibility_status
+            self.app.compatibility_action = self._show_compatibility
         self.root.deiconify()
         self.root.lift()
         self.root.focus_force()
@@ -146,6 +165,18 @@ class WindowsTray:
                 break
             if command == "open":
                 self._show_panel()
+            elif command == "compatibility_status":
+                self.compatibility_status = value
+                if self.app is not None:
+                    self.app.compatibility_snapshot = value
+            elif command == "compatibility_warning":
+                from .compatibility import COMPONENTS
+                affected = ", ".join(COMPONENTS[k][0] for k in value["components"] if k in COMPONENTS)
+                message = ("Codex data format is incompatible. " if value["confirmed"] else
+                           "Readings have been unavailable for five minutes; the cause is unknown. ")
+                self.icon.notify(message + affected + ". Click for details.", "CodexMeter data needs attention")
+            elif command == "compatibility" and not self.quit_requested:
+                self._show_compatibility()
             elif command == "pricing_warning":
                 self.icon.notify(value, "CodexMeter pricing needs attention")
             elif command == "pricing_notice":
@@ -189,6 +220,7 @@ class WindowsTray:
             MenuItem("Open control panel", lambda: self.open_control_panel(), default=True),
             MenuItem(lambda item: self.snapshot["text"], None, enabled=False),
             Menu.SEPARATOR,
+            MenuItem("Codex data status…", lambda: self.open_compatibility()),
             MenuItem("Pricing source status…", lambda: self.open_pricing_notice()),
             MenuItem("Updates…", lambda: self.open_updates()),
             MenuItem("Quit CodexMeter", lambda: self.quit()),

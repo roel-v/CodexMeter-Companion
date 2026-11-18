@@ -1,4 +1,4 @@
-"""English Windows control panel. BLE and the daemon run in separate processes."""
+"""English Windows control panel. Companion transports run in the daemon process."""
 from __future__ import annotations
 
 import asyncio
@@ -25,9 +25,15 @@ class MeterApp:
         root.minsize(680, 500)
         self.results: queue.Queue = queue.Queue()
         self.busy = False
+        self.tray_managed = tray_managed
+        self.compatibility_snapshot = {}
+        self.compatibility_action = None
+        self.compatibility_polling = False
+        self.compatibility_results = queue.Queue()
         self.codex = tk.StringVar(value="codex")
         self.short_id = tk.StringVar()
         self.alias = tk.StringVar(value="Desk")
+        self.connection_mode = tk.StringVar(value="auto")
         self.status = tk.StringVar(value="Ready — start the bridge, then scan for your display.")
         frame = ttk.Frame(root, padding=20)
         frame.pack(fill="both", expand=True)
@@ -49,9 +55,10 @@ class MeterApp:
         register = ttk.Frame(frame)
         register.pack(fill="x", pady=4)
         ttk.Label(register, text="Display ID").pack(side="left")
-        ttk.Entry(register, textvariable=self.short_id, width=10).pack(side="left", padx=8)
+        ttk.Entry(register, textvariable=self.short_id, width=27).pack(side="left", padx=8)
         ttk.Label(register, text="Name").pack(side="left")
         ttk.Entry(register, textvariable=self.alias, width=16).pack(side="left", padx=8)
+        ttk.Combobox(register,textvariable=self.connection_mode,values=("auto","usb_only","bluetooth_only"),state="readonly",width=14).pack(side="left")
         ttk.Button(register, text="Register display", command=self.adopt).pack(side="left")
         controls = ttk.Frame(frame)
         controls.pack(fill="x", pady=10)
@@ -64,6 +71,12 @@ class MeterApp:
         ttk.Button(controls, text="Tokens / pricing", command=self.open_pricing).pack(side="left", padx=5)
         from .update_dialog import show_updates
         ttk.Button(controls, text="Updates", command=lambda: show_updates(self.root)).pack(side="left", padx=5)
+        from .compatibility_dialog import show_compatibility
+        self.compatibility_text = tk.StringVar(value="Checking Codex data compatibility…")
+        ttk.Label(frame, textvariable=self.compatibility_text, wraplength=720).pack(anchor="w")
+        ttk.Button(frame, text="Codex data status / details…", command=lambda:
+            self.compatibility_action() if self.compatibility_action else
+            show_compatibility(self.root, lambda: self.compatibility_snapshot)).pack(anchor="w")
         self.pricing_status = tk.StringVar()
         ttk.Label(frame, textvariable=self.pricing_status, wraplength=720, foreground="#9b5800").pack(anchor="w")
         self.pricing_review_button = ttk.Button(frame, text="Review pricing change…",
@@ -140,7 +153,7 @@ class MeterApp:
         self.launch_job(lambda: json.dumps(asyncio.run(send_event({"type": "shutdown"})), indent=2))
 
     def adopt(self) -> None:
-        self.command("devices", "adopt", self.short_id.get().strip(), "--alias", self.alias.get().strip())
+        self.command("devices", "adopt", self.short_id.get().strip(), "--alias", self.alias.get().strip(), "--connection-mode", self.connection_mode.get())
 
     def open_log(self) -> None:
         if LOG_FILE.exists():
@@ -150,6 +163,23 @@ class MeterApp:
 
     def poll(self) -> None:
         self.pricing_poll_count += 1
+        from .compatibility_dialog import summary
+        if not self.tray_managed and self.pricing_poll_count % 50 == 1 and not self.compatibility_polling:
+            self.compatibility_polling = True
+            def read_health():
+                try:
+                    from .events import send_event
+                    reply = asyncio.run(send_event({"type": "ping"}))
+                    self.compatibility_results.put(reply.get("compatibility", reply.get("status", {}).get("compatibility", {})))
+                except Exception:
+                    self.compatibility_results.put({})
+            threading.Thread(target=read_health, daemon=True).start()
+        try:
+            self.compatibility_snapshot = self.compatibility_results.get_nowait()
+            self.compatibility_polling = False
+        except queue.Empty:
+            pass
+        self.compatibility_text.set(summary(self.compatibility_snapshot))
         if self.pricing_poll_count % 50 == 1:
             from .pricing import PricingStore
             state = PricingStore().status()

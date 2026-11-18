@@ -15,12 +15,12 @@ if ($LASTEXITCODE) { throw 'Nuitka dependency installation failed.' }
 Push-Location $PSScriptRoot
 try {
     & $MeterPython -m nuitka "--mode=$Mode" --msvc=latest --jobs=8 --lto=no `
-        --enable-plugin=tk-inter --include-package=codexmeter --include-package=winrt `
+        --enable-plugin=tk-inter --include-package=codexmeter --include-package=serial --include-package=winrt `
         --include-package=bleak.backends.winrt --windows-console-mode=attach `
         --include-module=pystray._win32 --include-module=PIL.IcoImagePlugin `
         --assume-yes-for-downloads --output-filename=CodexMeter.exe "--output-dir=$output" `
-        --company-name=CodexMeter --product-name=CodexMeter --file-version=3.12.3.1 `
-        --product-version=3.12.3.1 --file-description='CodexMeter Windows companion' `
+        --company-name=CodexMeter --product-name=CodexMeter --file-version=3.12.3.4 `
+        --product-version=3.12.3.4 --file-description='CodexMeter Windows companion' `
         "--report=$output\compilation-report.xml" windows_entry.py
     if ($LASTEXITCODE) { throw 'Standalone build failed.' }
 } finally { Pop-Location }

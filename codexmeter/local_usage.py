@@ -22,6 +22,7 @@ class _SessionFileState:
     usage_records: dict[str, tuple[dt.date, int]] = field(default_factory=dict)
     turn_models: dict[str, str] = field(default_factory=dict)
     current_model: str | None = None
+    invalid: bool = False
     detailed_records: dict[str, dict] = field(default_factory=dict)
 
 
@@ -79,18 +80,21 @@ class LocalTokenUsageReader:
                 try:
                     stat = path.stat()
                 except OSError:
-                    continue
+                    raise
                 if stat.st_mtime < day_start:
                     continue
                 candidates.add(path)
                 self._scan_file(path, stat.st_ino, first_date, target_date, local_now.tzinfo)
         except OSError:
-            return None
+            raise
 
         for path in tuple(self._states):
             if path not in candidates:
                 del self._states[path]
 
+        if any(state.invalid for state in self._states.values()):
+            from .compatibility import ContractError
+            raise ContractError(field="tokens")
         observed = [state for state in self._states.values() if state.observed_dates]
         if not observed:
             return None
@@ -117,22 +121,43 @@ class LocalTokenUsageReader:
         try:
             size = path.stat().st_size
         except OSError:
-            return
+            raise
         if state is None or state.inode != inode or size < state.offset:
             state = _SessionFileState(inode=inode)
             self._states[path] = state
 
+        state.invalid = False
         try:
             with path.open(encoding="utf-8") as handle:
                 handle.seek(state.offset)
                 while True:
                     line_start = handle.tell()
-                    line = handle.readline()
+                    line = handle.readline(65536)
+                    if len(line) == 65536 and not line.endswith("\n"):
+                        candidate = '"token_usage_record"' in line[:1024] or '"token_count"' in line[:1024]
+                        tail = line
+                        while tail and not tail.endswith("\n"):
+                            tail = handle.readline(65536)
+                        if not tail:
+                            handle.seek(line_start)
+                            break
+                        if candidate:
+                            from .compatibility import ContractError
+                            state.invalid = True
+                            raise ContractError(field="tokens")
+                        state.offset = handle.tell()
+                        continue
                     if not line:
                         break
                     if not line.endswith("\n"):
                         handle.seek(line_start)
                         break
+                    from .compatibility_readers import validate_usage_line
+                    try:
+                        validate_usage_line(line)
+                    except ValueError:
+                        state.invalid = True
+                        raise
                     state.offset = handle.tell()
                     self._capture_session_meta(line, state)
                     if '"turn_context"' in line:
@@ -143,7 +168,7 @@ class LocalTokenUsageReader:
                         continue
                     self._apply_token_event(line, state, first_date, target_date, timezone)
         except OSError:
-            return
+            raise
 
     @staticmethod
     def _capture_turn(line, state):

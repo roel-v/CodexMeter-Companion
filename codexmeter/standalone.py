@@ -40,10 +40,20 @@ def self_test(output: Path) -> int:
         root.update()
         display_dialog = next(w for w in root.winfo_children()
                               if isinstance(w, tk.Toplevel) and w.title().endswith("Displays"))
+        widget_names = {str(w).split('.')[-1] for frame in display_dialog.winfo_children()
+                        for w in frame.winfo_children()}
+        assert {'connection_mode', 'apply_mode', 'maintenance_pause', 'maintenance_resume'} <= widget_names
+        result['connection_maintenance_controls'] = True
         display_dialog.withdraw()
         root.update()
         display_dialog.destroy()
         result["displays_panel"] = True
+        # Constructed controls are checked without invoking live maintenance/mode changes.
+        from .device_dialog import device_row
+        fixture = device_row({'device_id':'codexmeter-000000000001', 'connected':True,
+            'transport':'usb', 'connection_mode':'usb_only', 'connection_state':'usb_active'})
+        assert fixture[5:7] == ('usb', 'usb_only')
+        result['transport_status_projection'] = True
         import tempfile
         from .update_dialog import show_updates
         from .updates import UpdateStore

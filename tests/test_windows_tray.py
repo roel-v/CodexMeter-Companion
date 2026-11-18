@@ -35,3 +35,11 @@ def test_control_panel_event_does_not_send_device_payload():
         assert response == {"ok": True, "queued": "open_control_panel"}
         assert opened == [True]
     asyncio.run(scenario())
+
+
+def test_generic_usb_status_ignores_disabled_peer_and_missing_optional_ble():
+    assert connection_display({'configured_count':1,'bluetooth_available':False,'devices':[
+        {'connected':False,'enabled':False,'label':'Disabled'},
+        {'connected':True,'enabled':True,'transport':'usb','label':'USB Desk'}]}) == ('Connected: USB Desk','green')
+    assert connection_display({'configured_count':1,'devices':[{'connection_state':'maintenance'}]}) == ('Displays paused for maintenance','gray')
+    assert connection_display({'configured_count':1,'devices':[{'connection_state':'owned_elsewhere'}]}) == ('Displays in use elsewhere','amber')

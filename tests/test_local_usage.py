@@ -185,7 +185,7 @@ def test_paginated_fallback_missing_last_usage_does_not_count_history(tmp_path):
     assert LocalTokenUsageReader(tmp_path).read_today_tokens(NOW) == 40
 
 
-def test_invalid_usage_records_do_not_disable_legacy_counting(tmp_path):
+def test_invalid_usage_records_do_not_present_partial_legacy_total(tmp_path):
     write_rollout(tmp_path, "invalid.jsonl", [
         '{"type":"token_usage_record",',
         usage_record("bad-timestamp", 40),
@@ -194,7 +194,10 @@ def test_invalid_usage_records_do_not_disable_legacy_counting(tmp_path):
         usage_record("2026-07-17T01:00:00Z", 40, ""),
         token_event("2026-07-17T01:00:00Z", 100),
     ])
-    assert LocalTokenUsageReader(tmp_path).read_today_tokens(NOW) == 100
+    from codexmeter.compatibility import ContractError
+    import pytest
+    with pytest.raises(ContractError):
+        LocalTokenUsageReader(tmp_path).read_today_tokens(NOW)
 
 
 def test_week_uses_local_midnight_and_includes_exactly_seven_dates(tmp_path):

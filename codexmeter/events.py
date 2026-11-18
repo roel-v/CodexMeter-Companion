@@ -228,12 +228,14 @@ class EventServer:
         verify_task_starts: bool = False,
         open_control_panel: Callable[[], None] | None = None,
         device_controller=None,
+        device_operator=None,
     ) -> None:
         self.sink = sink
         self.socket_path = socket_path
         self.status_provider = status_provider
         self.open_control_panel = open_control_panel
         self.device_controller = device_controller
+        self.device_operator = device_operator
         self.server: asyncio.AbstractServer | None = None
         self.auth_token: str | None = None
         self.stop_event: asyncio.Event | None = None
@@ -305,6 +307,10 @@ class EventServer:
 
     async def _dispatch(self, event: dict[str, Any]) -> dict[str, Any]:
         event_type = event.get("type")
+        if event_type in ('device_registry_update', 'devices_reload', 'device_mode', 'maintenance_acquire', 'maintenance_release', 'maintenance_resume'):
+            if self.device_operator is None:
+                raise ValueError('Device operations unavailable')
+            return await self.device_operator(event)
         if event_type == "device_control":
             if self.device_controller is None:
                 raise ValueError("Device controls unavailable")
@@ -362,6 +368,10 @@ class EventServer:
 
     async def _dispatch_activity(self, event: dict[str, Any]) -> dict[str, Any]:
         event_type = event.get("type")
+        if event_type in ('device_registry_update', 'devices_reload', 'device_mode', 'maintenance_acquire', 'maintenance_release', 'maintenance_resume'):
+            if self.device_operator is None:
+                raise ValueError('Device operations unavailable')
+            return await self.device_operator(event)
         if event_type == "device_control":
             if self.device_controller is None:
                 raise ValueError("Device controls unavailable")

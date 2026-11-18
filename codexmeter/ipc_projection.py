@@ -199,7 +199,8 @@ class ProjectionReader:
 FIELDS = {"threadRuntimeStatus", "hasUnreadTurn", "parentThreadId", "source"}
 PATCH = {"op": ALL, "path": ALL, "value": ALL}
 SCHEMA = {"type": ALL, "requestId": ALL, "method": ALL, "version": ALL,
-          "sourceClientId": ALL, "result": {"clientId": ALL},
+          "sourceClientId": ALL, "resultType": ALL, "error": ALL, "handledByClientId": ALL,
+          "result": {"clientId": ALL},
           "params": {"hostId": ALL, "conversationId": ALL, "clientId": ALL,
                      "status": ALL, "change": {"type": ALL, "revision": ALL,
                      "baseRevision": ALL, "patches": [PATCH],

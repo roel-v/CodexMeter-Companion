@@ -60,7 +60,7 @@ def show_updates(root, store=None):
     return dialog
 
 
-def show_notifications(root, pricing, updates):
+def show_notifications(root, pricing, updates, *, compatibility=None, snapshot=None):
     # Windows balloon callbacks carry no per-notification ID. Show both statuses
     # so an older pricing balloon can never silently route to an update instead.
     from .pricing import PricingStore
@@ -68,6 +68,12 @@ def show_notifications(root, pricing, updates):
     dialog.title("CodexMeter — Notifications")
     frame = ttk.Frame(dialog, padding=20)
     frame.pack()
+    if compatibility is not None:
+        from .compatibility_dialog import summary
+        ttk.Label(frame, text="Codex data", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        ttk.Label(frame, text=summary(snapshot or {}), wraplength=520).pack(anchor="w", pady=8)
+        ttk.Button(frame, text="Codex data details…", command=compatibility).pack(anchor="w")
+        ttk.Separator(frame).pack(fill="x", pady=12)
     ttk.Label(frame, text="Pricing source", font=("Segoe UI", 11, "bold")).pack(anchor="w")
     ttk.Label(frame, text=PricingStore().review_summary(), wraplength=520).pack(anchor="w", pady=8)
     ttk.Button(frame, text="Pricing details…", command=pricing).pack(anchor="w")

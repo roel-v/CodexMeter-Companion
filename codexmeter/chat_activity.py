@@ -18,36 +18,33 @@ import time
 import uuid
 
 from .payloads import Payload, build_activity_payload
+from .compatibility import ContractError, report_error
+from .compatibility_readers import read_roots, read_unread, validate_state
 
 FIELDS = {"threadRuntimeStatus", "hasUnreadTurn", "parentThreadId", "source"}
 from .ipc_projection import CHUNK, receive_metadata
 WAIT_FLAGS = {"waitingOnApproval", "waitingOnUserInput"}
+SUPPORTED_STREAM_VERSIONS = {11, 13}
+
+
+class UnsupportedStreamVersion(ContractError):
+    """The private stream changed; do not interpret unknown state semantics."""
+
+
+def apply_stream_change(states: dict, tid: str, version: int, change: dict) -> None:
+    if type(version) is not int or version not in SUPPORTED_STREAM_VERSIONS:
+        raise UnsupportedStreamVersion("unsupported_version", "version", definitive=True, version=version)
+    try:
+        apply_change(states, tid, change)
+        validate_state(states[tid]["state"])
+    except (KeyError, TypeError, IndexError):
+        raise ContractError(field="patch") from None
 
 
 def read_inventory(home: Path) -> tuple[set[str], set[str]]:
     """Read indexed metadata only; no transcripts, credentials, or DB writes."""
-    with sqlite3.connect((home / "state_5.sqlite").as_uri() + "?mode=ro", uri=True,
-                         timeout=1) as db:
-        roots = {row[0] for row in db.execute(
-            "SELECT id FROM threads WHERE archived=0 AND source IN ('cli','vscode') "
-            "AND id NOT IN (SELECT child_thread_id FROM thread_spawn_edges)")}
-    state = json.loads((home / ".codex-global-state.json").read_text(encoding="utf-8"))
-    identities = state["electron-thread-read-state-v1"]["unreadByIdentity"]
-    if len(identities) != 1:
-        raise ValueError("Cannot unambiguously select the Codex unread account")
-    unread = set()
-    for host, ids in next(iter(identities.values())).items():
-        if host.startswith("local:"):
-            unread.update(ids)
-    completed = set()
-    with sqlite3.connect((home / "thread_history_1.sqlite").as_uri() + "?mode=ro",
-                         uri=True, timeout=1) as db:
-        for tid in roots & unread:
-            row = db.execute("SELECT status FROM thread_turns WHERE thread_id=? "
-                             "ORDER BY rollout_ordinal DESC LIMIT 1", (tid,)).fetchone()
-            if row and row[0] == "completed":
-                completed.add(tid)
-    return roots, completed
+    roots = read_roots(home)
+    return roots, read_unread(home, roots)
 
 
 def apply_change(states: dict, tid: str, change: dict) -> None:
@@ -88,6 +85,12 @@ def apply_change(states: dict, tid: str, change: dict) -> None:
     entry["revision"] = change["revision"]
 
 
+def coverage_complete(roots, states, coverage, now):
+    return all(coverage.get(tid, (0, None))[0] > now and
+               (coverage[tid][1] is None or states.get(tid, {}).get("owner") == coverage[tid][1])
+               for tid in roots)
+
+
 def count_chats(roots: set[str], completed_unread: set[str], states: dict) -> tuple[int, int, int]:
     running = waiting = 0
     done = set(completed_unread) & roots
@@ -111,17 +114,26 @@ def count_chats(roots: set[str], completed_unread: set[str], states: dict) -> tu
 
 
 class ChatActivity:
-    def __init__(self, home: Path | None = None):
+    def __init__(self, home: Path | None = None, monitor=None):
+        self.monitor = monitor
+        self.desktop_running = None
+        self.done_available = False
         self.home = home or Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-        self.status = {"available": False, "scope": "local non-archived Codex chats"}
+        self.status = {"available": False, "scope": "local non-archived Codex chats",
+                       "reason": "connecting"}
         self.payload = self._payload(False)
 
     def _payload(self, available: bool, counts=(0, 0, 0)) -> Payload:
         payload = build_activity_payload(counts[0])
-        payload.data.update(wait=counts[1], done=counts[2], chats=available)
+        payload.data.update(wait=counts[1] if available else None,
+                            done=counts[2] if available and self.done_available else None,
+                            chats=available)
+        payload.data["run"] = counts[0] if available else None
+        if available:
+            self.status["reason"] = None
         self.status.update(available=available, running=counts[0] if available else None,
                            waiting=counts[1] if available else None,
-                           done=counts[2] if available else None)
+                           done=counts[2] if available and self.done_available else None)
         return payload
 
     async def run(self, sink, stop_event):
@@ -139,11 +151,18 @@ class ChatActivity:
                 import traceback
                 locations = [(Path(f.filename).name, f.name, f.lineno)
                              for f in traceback.extract_tb(exc.__traceback__)]
+                report_error(self.monitor, "stream", exc, eligible=self.desktop_running is not False)
+                if self.monitor and self.desktop_running is False:
+                    for component in ("stream", "inventory", "unread"):
+                        self.monitor.observe(component, "unavailable", "closed", eligible=False)
+                reason = ("unsupported_stream_version" if isinstance(exc, UnsupportedStreamVersion)
+                          else "observer_error")
+                self.status["reason"] = reason
                 failure = (type(exc).__name__, locations)
                 now = time.monotonic()
                 if failure != last_failure or now - last_logged >= 300:
-                    logging.warning("Codex chat observer reconnecting: %s locations=%s",
-                                    type(exc).__name__, locations)
+                    logging.warning("Codex chat observer reconnecting: %s reason=%s locations=%s",
+                                    type(exc).__name__, reason, locations)
                     last_failure, last_logged = failure, now
             self.payload = self._payload(False)
             await sink(self.payload)
@@ -180,13 +199,36 @@ class ChatActivity:
             owners = set()
             subscribed = set()
             roots, done = set(), set()
+            discoveries = {}
+            coverage = {}
+            evidence_changed = False
             next_inventory = 0
             ready_at = time.monotonic() + 3
             pending = asyncio.create_task(receive())
             while not stop_event.is_set():
                 now = time.monotonic()
                 if now >= next_inventory:
-                    roots, done = await asyncio.to_thread(read_inventory, self.home)
+                    try:
+                        roots = await asyncio.to_thread(read_roots, self.home)
+                        if self.monitor:
+                            self.monitor.observe("inventory")
+                    except Exception as exc:
+                        report_error(self.monitor, "inventory", exc)
+                        raise
+                    try:
+                        done = await asyncio.to_thread(read_unread, self.home, roots)
+                        self.done_available = True
+                        if self.monitor:
+                            self.monitor.observe("unread")
+                            self.done_available = self.monitor.records["unread"].state == "compatible"
+                    except Exception as exc:
+                        done = set()
+                        self.done_available = False
+                        if isinstance(exc, LookupError) and not isinstance(exc, ContractError):
+                            if self.monitor:
+                                self.monitor.observe("unread", "unavailable", "ambiguous_account")
+                        else:
+                            report_error(self.monitor, "unread", exc)
                     for tid in subscribed ^ roots:
                         send(dict(type="broadcast", method="thread-stream-following-changed",
                                   version=1, sourceClientId=client,
@@ -195,11 +237,41 @@ class ChatActivity:
                         states.pop(tid, None)
                     subscribed = roots
                     next_inventory = now + 5
+
+                # Read-only owner discovery supplies explicit negative coverage for idle/unloaded chats.
+                # Bounded concurrency; no transcript or thread-start/read request is sent.
+                for rid, (tid, deadline) in list(discoveries.items()):
+                    if now > deadline:
+                        discoveries.pop(rid)
+                        coverage.pop(tid, None)
+                queued = {tid for tid, _ in discoveries.values()}
+                for tid in roots:
+                    if len(discoveries) >= 16:
+                        break
+                    if tid in queued or coverage.get(tid, (0, None))[0] > now + 10:
+                        continue
+                    rid = str(uuid.uuid4())
+                    discoveries[rid] = (tid, now + 10)
+                    send(dict(type="request", requestId=rid, sourceClientId=client, version=1,
+                              method="thread-owner-discovery", timeoutMs=5000,
+                              params=dict(hostId="local", conversationId=tid)))
                 finished, _ = await asyncio.wait({pending}, timeout=1)
+                discovery = None
                 if finished:
                     message = pending.result()
                     pending = asyncio.create_task(receive())
                     method = message.get("method")
+                    discovery = discoveries.pop(message.get("requestId"), None)
+                    if discovery:
+                        evidence_changed = True
+                        tid, _ = discovery
+                        if message.get("resultType") == "error" and message.get("error") == "no-client-found":
+                            coverage[tid] = (now + 60, None)
+                            states.pop(tid, None)
+                        elif message.get("resultType") == "success" and isinstance(message.get("handledByClientId"), str):
+                            coverage[tid] = (now + 60, message["handledByClientId"])
+                        else:
+                            raise ContractError(field="coverage")
                     if message.get("type") == "client-discovery-request":
                         send(dict(type="client-discovery-response", requestId=message["requestId"],
                                   response={"canHandle": False}))
@@ -220,15 +292,38 @@ class ChatActivity:
                         params = message["params"]
                         tid = params["conversationId"]
                         if params.get("hostId") == "local" and tid in roots:
-                            if message.get("version") != 11:
-                                raise ValueError("Unsupported Codex chat stream version")
-                            apply_change(states, tid, params["change"])
+                            owner = message.get("sourceClientId")
+                            if not isinstance(owner, str):
+                                raise ContractError(field="coverage")
+                            previous_owner = states.get(tid, {}).get("owner")
+                            if previous_owner is not None and previous_owner != owner:
+                                states.pop(tid, None)
+                            if tid in coverage and coverage[tid][1] != owner:
+                                coverage.pop(tid)
+                            apply_stream_change(states, tid, message.get("version"), params["change"])
+                            states[tid]["owner"] = owner
                             owners.add(message.get("sourceClientId"))
+                            evidence_changed = True
+
                     # Drain queued patches before publishing; text deltas can be frequent.
                     if now < ready_at:
                         continue
                 if now >= ready_at:
-                    self.payload = self._payload(True, count_chats(roots, done, states))
+                    # Counts are complete only when every subscribed root has supplied metadata.
+                    complete = coverage_complete(roots, states, coverage, now)
+                    self.status["coverage"] = {"roots": len(roots), "snapshots": len(states),
+                                               "verified": sum(tid in coverage for tid in roots)}
+                    # Discovery is fresh source evidence, never a timer-generated success.
+                    if self.monitor and complete and evidence_changed:
+                        self.monitor.observe("stream")
+                        evidence_changed = False
+                    if self.monitor and not complete:
+                        self.monitor.observe("stream", "unavailable", "incomplete")
+                    if self.monitor and not roots:
+                        self.monitor.observe("stream")
+                    stream_ok = complete and (self.monitor is None or
+                        self.monitor.records["stream"].state == "compatible")
+                    self.payload = self._payload(stream_ok, count_chats(roots, done, states))
                     await sink(self.payload)
                     ready_at = now + 2
         finally:

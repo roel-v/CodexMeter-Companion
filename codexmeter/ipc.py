@@ -86,7 +86,7 @@ async def send(event: dict, path: Path) -> dict:
         await writer.drain()
         if not WINDOWS and writer.can_write_eof():
             writer.write_eof()
-        raw = await asyncio.wait_for(reader.readline(), 3)
+        raw = await asyncio.wait_for(reader.readline(), 12 if event.get("event", event).get("type", "").startswith("maintenance_") else 3)
         if len(raw) > MAX_EVENT_BYTES:
             raise ValueError("Local event response is too large")
         result = json.loads(raw) if raw else {}

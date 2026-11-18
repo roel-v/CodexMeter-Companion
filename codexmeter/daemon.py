@@ -26,7 +26,7 @@ from .limits import (
     is_suspicious_initial_snapshot,
     merge_missing_token_activity,
 )
-from .multi_ble import DeviceManager
+from .device_manager import DeviceManager
 from .payloads import Payload, build_activity_payload, build_usage_payload
 from .persistence import atomic_write_json
 from .provider import CodexUsageProvider
@@ -128,10 +128,8 @@ async def quota_loop(
     while not stop_event.is_set():
         try:
             raw_snapshot = await provider.fetch()
-            raw_snapshot = merge_missing_token_activity(
-                raw_snapshot,
-                stabilizer.trusted,
-            )
+            if getattr(provider, "monitor", None) is None:
+                raw_snapshot = merge_missing_token_activity(raw_snapshot, stabilizer.trusted)
             if stabilizer.trusted is None and is_suspicious_initial_snapshot(raw_snapshot):
                 logging.warning(
                     "Rejected suspicious initial usage sample raw_h5=%s raw_d7=%s "
@@ -144,6 +142,10 @@ async def quota_loop(
             else:
                 decision = stabilizer.stabilize(raw_snapshot)
                 snapshot = decision.snapshot
+                if getattr(provider, "monitor", None) is not None:
+                    from dataclasses import replace
+                    snapshot = replace(snapshot, today_tokens=raw_snapshot.today_tokens,
+                        last_7d_tokens=raw_snapshot.last_7d_tokens, token_details=raw_snapshot.token_details)
                 payload = build_usage_payload(snapshot)
                 last_usage_payload = payload
                 await sink(payload)
@@ -297,7 +299,11 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         except NotImplementedError:
             signal.signal(sig, lambda *_: stop())
 
+    from .compatibility import CompatibilityMonitor
+    monitor = CompatibilityMonitor(APP_DIR / "compatibility-incidents.json",
+        components=None if sys.platform == "win32" else ["quota", "tokens"])
     provider = CodexUsageProvider(
+        monitor=monitor,
         codex_bin=args.codex_bin,
         timeout_sec=args.timeout,
         refresh_token=args.refresh_token,
@@ -317,6 +323,8 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             macos_uuid=config.macos_uuid,
             legacy=False,
             metadata=identity.metadata,
+            connection_mode=config.connection_mode,
+            maintenance=config.maintenance,
         )
         registry.upsert(updated)
         try:
@@ -334,7 +342,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         return updated
 
     manager = DeviceManager(
-        registry.enabled_devices(),
+        registry.devices,
         scan_timeout_sec=args.scan_timeout,
         scan_interval_sec=args.scan_interval,
         connect_timeout_sec=args.ble_connect_timeout,
@@ -346,14 +354,16 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         fallback_device_name=args.device_name,
         fallback_when_empty=not registry.devices,
         identity_observer=bind_identity,
+        registry=registry,
+        screen_timeout_sec=args.auto_screen_timeout,
     )
     from .chat_activity import ChatActivity
     recovery = None
     if sys.platform == "win32":
         from .bluetooth_recovery import BluetoothRecovery
-        recovery = BluetoothRecovery(manager.status)
+        recovery = BluetoothRecovery(manager.bluetooth_status)
         manager.discovery.after_scan = recovery.observe
-    chats = ChatActivity() if sys.platform == "win32" else None
+    chats = ChatActivity(monitor=monitor) if sys.platform == "win32" else None
     await manager.broadcast(chats.payload if chats else build_activity_payload(0))
 
     async def sink(payload: Payload) -> None:
@@ -365,7 +375,15 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         await manager.broadcast(payload)
 
     def status_provider() -> dict[str, object]:
-        status = {"ble": manager.status()}
+        snapshot = manager.status()
+        for device in snapshot.get("devices", []):
+            firmware = device.get("firmware", "")
+            device["metric_validity"] = "supported" if "metric_validity" in device.get("capabilities", []) else "upgrade_required"
+            if device["metric_validity"] != "supported":
+                device["metric_validity_note"] = (
+                    "Update display firmware for correct unknown/partial task counts. Older Ball firmware may show zero.")
+        # Compatibility projection: old IPC/tray clients still read ble.
+        status = {"devices": snapshot, "ble": snapshot, "compatibility": monitor.snapshot()}
         if recovery is not None:
             status["bluetooth_recovery"] = recovery.status()
         if chats is not None:
@@ -373,6 +391,30 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         if desktop is not None:
             status["tray"] = desktop.snapshot
         return status
+
+    async def compatibility_loop():
+        from .compatibility_versions import local_versions
+        next_versions = 0
+        while not stop_event.is_set():
+            try:
+                if time.monotonic() >= next_versions:
+                    monitor.versions = await asyncio.to_thread(local_versions, args.codex_bin)
+                    monitor.host_presence(monitor.versions.get("desktop_running"))
+                    next_versions = time.monotonic() + 60
+                if chats is not None:
+                    chats.desktop_running = monitor.versions.get("desktop_running")
+                monitor.tick()
+                snapshot = monitor.snapshot()
+                if desktop is not None:
+                    desktop.commands.put(("compatibility_status", snapshot))
+                    notice = monitor.notifications()
+                    if notice:
+                        desktop.commands.put(("compatibility_warning", notice))
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logging.warning("Compatibility monitor observation failed")
+            await asyncio.sleep(1)
 
     async def tray_status_loop():
         while not stop_event.is_set():
@@ -387,6 +429,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         verify_task_starts=True,
         open_control_panel=desktop.open_control_panel if desktop is not None else None,
         device_controller=manager.control_device,
+        device_operator=manager.device_operation,
     )
 
     await supervise(
@@ -395,6 +438,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             **({"diagnostics": diagnostics.heartbeat(stop_event, desktop)} if diagnostics else {}),
             **({"chat_activity": chats.run(manager.broadcast, stop_event)} if chats else {}),
             **({"tray_status": tray_status_loop()} if desktop is not None else {}),
+            "compatibility": compatibility_loop(),
             "events": event_server.run(stop_event),
             "quota": quota_loop(provider, sink, stop_event, args.poll_interval),
             "pricing": pricing_monitor_loop(stop_event, desktop),
@@ -406,8 +450,9 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
                 timeout_sec=args.auto_screen_timeout,
                 poll_interval_sec=args.lock_poll_interval,
                 connect_control_setter=manager.set_connect_control,
+                observation_observer=manager.observe_lock,
             ),
-            "ble": manager.run(stop_event),
+            "devices": manager.run(stop_event),
         },
     )
 

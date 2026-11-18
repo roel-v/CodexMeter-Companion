@@ -91,6 +91,37 @@ def check_tray():
         def check():
             assert tray.pricing_dialog is not None and tray.pricing_dialog.winfo_exists()
             tray.pricing_dialog.destroy()
+        step(check, compatibility_open)
+
+    def compatibility_open():
+        def check():
+            from .compatibility import CompatibilityMonitor
+            m = CompatibilityMonitor(components=["stream"])
+            m.observe("stream", "incompatible", "unsupported_version",
+                      {"observed_version": 14}, definitive=True)
+            tray.commands.put(("compatibility_status", m.snapshot()))
+            tray.open_compatibility()
+        step(check, compatibility_opened)
+
+    def compatibility_opened():
+        def check():
+            assert tray.compatibility_dialog is not None and tray.compatibility_dialog.winfo_exists()
+            original = tray.compatibility_dialog
+            tray._show_compatibility()
+            assert tray.compatibility_dialog is original
+            assert "format" in tray.app.compatibility_text.get()
+            result["compatibility_dialog_and_persistent_warning"] = True
+            original.destroy()
+            from .compatibility import CompatibilityMonitor
+            m = CompatibilityMonitor(components=["stream"])
+            m.observe("stream")
+            tray.commands.put(("compatibility_status", m.snapshot()))
+        step(check, compatibility_recovered)
+
+    def compatibility_recovered():
+        def check():
+            assert "available" in tray.app.compatibility_text.get()
+            result["compatibility_recovery"] = True
         step(check, disconnected)
 
     def disconnected():

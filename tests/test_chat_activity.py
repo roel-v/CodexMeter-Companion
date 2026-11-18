@@ -75,3 +75,32 @@ def test_unavailable_payload_and_ble_size():
     assert tracker.payload.data["chats"] is False
     assert tracker.status["running"] is None
     assert len(tracker._payload(True, (200, 300, 400)).to_json_bytes()) <= 512
+
+
+@pytest.mark.parametrize("version", [11, 13])
+def test_supported_stream_versions_apply_metadata_snapshot_and_patch(version):
+    from codexmeter.chat_activity import apply_stream_change
+    states = {}
+    apply_stream_change(states, "root", version, snapshot("active"))
+    apply_stream_change(states, "root", version, {
+        "type": "patches", "baseRevision": 1, "revision": 2, "patches": [
+            {"op": "replace", "path": ["threadRuntimeStatus", "type"], "value": "idle"},
+            {"op": "replace", "path": ["hasUnreadTurn"], "value": True}]})
+    assert count_chats({"root"}, {"root"}, states) == (0, 0, 1)
+    assert "turns" not in states["root"]["state"]
+
+
+@pytest.mark.parametrize("version", [None, 12, 14, "13", 13.0, [], {}])
+def test_unknown_stream_versions_fail_closed(version):
+    from codexmeter.chat_activity import apply_stream_change, UnsupportedStreamVersion
+    states = {}
+    with pytest.raises(UnsupportedStreamVersion):
+        apply_stream_change(states, "root", version, snapshot("active"))
+    assert states == {}
+
+
+def test_available_status_clears_failure_reason():
+    tracker = ChatActivity()
+    tracker.status["reason"] = "unsupported_stream_version"
+    tracker._payload(True, (1, 0, 0))
+    assert tracker.status["reason"] is None
