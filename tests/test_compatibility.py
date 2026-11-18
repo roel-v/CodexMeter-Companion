@@ -1,12 +1,6 @@
 from codexmeter.compatibility import CompatibilityMonitor, safe_details
+from tests.support.compatibility import Clock
 
-class Clock:
-    now = 0.
-    def __call__(self): return self.now
-    def advance(self, m, seconds):
-        for _ in range(seconds):
-            self.now += 1
-            m.tick()
 
 def test_incident_recovery_restart(tmp_path):
     c = Clock()

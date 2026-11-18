@@ -7,7 +7,7 @@ from codexmeter.compatibility import CompatibilityMonitor, ContractError
 from codexmeter.compatibility_readers import read_roots, read_unread, validate_quota, validate_usage_line, validate_state
 from codexmeter.compatibility_dialog import diagnostic_report, summary
 from codexmeter.provider import CodexUsageProvider
-from tests.test_provider import FakeClient, FakeLocalUsageReader, RATE_LIMITS
+from tests.support.provider import FakeClient, FakeLocalUsageReader, RATE_LIMITS
 
 def test_quotas_fail_tokens_continue_and_recover():
     class Broken(FakeClient):
@@ -88,7 +88,7 @@ def test_activity_partial_unread_is_null():
     assert c._payload(False).data["run"] is None
 
 def test_outage_unknown_five_minutes_deduplicates(tmp_path):
-    from tests.test_compatibility import Clock
+    from tests.support.compatibility import Clock
     c=Clock()
     m=CompatibilityMonitor(tmp_path/"health.json",clock=c,wall=c,components=["tokens"])
     m.observe("tokens","unavailable","connection")
@@ -113,7 +113,7 @@ def test_owner_changes_invalidate_coverage():
     assert not coverage_complete({'a'}, {'a':{'owner':'new'}}, {'a':(60,'new')}, 61)
 
 def test_closed_host_suppresses_all_outages_but_preserves_incompatibility():
-    from tests.test_compatibility import Clock
+    from tests.support.compatibility import Clock
     c=Clock(); m=CompatibilityMonitor(clock=c,wall=c,components=['quota'])
     m.host_presence(False)
     m.observe('quota','unavailable','connection')
@@ -127,7 +127,7 @@ def test_closed_host_suppresses_all_outages_but_preserves_incompatibility():
     assert m.notifications()
 
 def test_unresolved_evidence_survives_closed_restart(tmp_path):
-    from tests.test_compatibility import Clock
+    from tests.support.compatibility import Clock
     c=Clock(); path=tmp_path/'health.json'
     m=CompatibilityMonitor(path,clock=c,wall=c,components=['stream'])
     m.observe('stream','incompatible','unsupported_version',{'observed_version':14},definitive=True)
@@ -140,7 +140,7 @@ def test_unresolved_evidence_survives_closed_restart(tmp_path):
 
 def test_empty_inventory_recovery_requires_fresh_reads(monkeypatch):
     from codexmeter import chat_activity as activity
-    from tests.test_compatibility import Clock
+    from tests.support.compatibility import Clock
     async def run():
         clock = Clock(); stop = asyncio.Event()
         monitor = CompatibilityMonitor(clock=clock, wall=clock)

@@ -1,7 +1,7 @@
 import pytest
 from codexmeter.companion_protocol import *
+from tests.support.usb_protocol import B, identity_data
 
-B = "0011223344556677"
 T = "b" * 32
 
 
@@ -58,20 +58,6 @@ def test_invalid_objects(raw):
 def test_protocol_shaped_invalid_reply(fields):
     with pytest.raises(ProtocolError):
         parse_reply(b"CM1 " + json.dumps({"boot": B, **fields}).encode())
-
-
-def identity_data():
-    return {
-        "device_id": "codexmeter-001122334455",
-        "short_id": "001122",
-        "name": "CodexMeter-001122",
-        "usb": 1,
-        "app": 1,
-        "boot": B,
-        "fw": "test",
-        "model": "waveshare_c6_amoled_216",
-        "capabilities": ["brightness", "screen", "rotation"],
-    }
 
 
 @pytest.mark.parametrize(

@@ -7,8 +7,8 @@ from codexmeter.ble_worker import DeviceWorker
 from codexmeter.usb_worker import UsbDeviceWorker
 from codexmeter.ble_session import BleSession
 from codexmeter.device_identity import DeviceIdentity
-from tests.test_usb_transport import UsbSession,discovered,FakeChannel,H
-from tests.test_ble_session import Peer,RAW
+from tests.support.usb_transport import UsbSession,discovered,FakeChannel,H
+from tests.support.ble_session import Peer,RAW
 
 @pytest.mark.parametrize('kind',['usb','bluetooth'])
 def test_actual_sessions_satisfy_management_contract(kind):

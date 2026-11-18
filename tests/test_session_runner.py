@@ -66,7 +66,7 @@ def test_adapter_lifecycle(monkeypatch, transport, stage):
 
 
 def test_manager_identity_is_lazy_cached_and_shared_with_added_workers(tmp_path, monkeypatch):
-    from tests.test_mixed_displays import manager, config
+    from tests.support.mixed_displays import manager, config
     from codexmeter.device_registry import DeviceRegistry
     import codexmeter.host_identity as identities
     calls=[]

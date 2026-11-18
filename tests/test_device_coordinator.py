@@ -7,7 +7,8 @@ from codexmeter.device_registry import DeviceConfig, DeviceRegistry
 from codexmeter.device_slot import DeviceSlot
 from codexmeter.device_manager import DeviceManager
 from codexmeter.usb_transport import UsbDiscovery, UsbCandidate
-from tests.test_usb_transport import FakeChannel, ID, H, B, discovered
+from tests.support.usb_transport import FakeChannel, ID, H, B, discovered
+from tests.support.device_coordinator import manager
 
 
 class Worker:
@@ -137,11 +138,6 @@ def test_pause_cancels_probe_waiting_for_semaphore_or_open():
         await d.pause('P',ID,'I')
         assert task.done() and not d._probing
     asyncio.run(run())
-
-
-def manager(configs, **extra):
-    return DeviceManager(configs,host_id=H,connect_timeout_sec=.1,disconnect_timeout_sec=.1,
-        write_timeout_sec=.1,ack_timeout_sec=.1,notify_timeout_sec=.1,healthcheck_interval_sec=1,**extra)
 
 
 def test_live_mode_atomic_persistence_alias_disabled_and_rollback(tmp_path,monkeypatch):

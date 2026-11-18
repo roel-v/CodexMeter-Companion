@@ -3,7 +3,7 @@ import sys
 import pytest
 from codexmeter.compatibility import CompatibilityMonitor
 from codexmeter.power_events import power_event_loop, WindowsPowerEvents
-from tests.test_compatibility import Clock
+from tests.support.compatibility import Clock
 
 
 @pytest.mark.parametrize("duration", [5, 3600])

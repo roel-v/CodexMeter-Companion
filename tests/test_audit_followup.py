@@ -7,8 +7,8 @@ from codexmeter.delivery import DeliveryState
 from codexmeter.delivery_pump import DeliveryPump
 from codexmeter.queueing import put_latest
 from codexmeter.usb_transport import UsbSession
-from tests.test_usb_transport import discovered, FakeChannel, H, B
-from tests.test_mixed_displays import manager, config
+from tests.support.usb_transport import discovered, FakeChannel, H, B
+from tests.support.mixed_displays import manager, config
 
 
 def test_manual_screen_ipc_binds_each_device_and_reports_partial_admission():
@@ -135,8 +135,8 @@ def test_legacy_consumers_do_not_refresh_expired_usage(trigger):
 
 def test_maintenance_uses_fresh_endpoint_after_closed_session(monkeypatch):
     from types import SimpleNamespace
-    from tests.test_device_coordinator import manager as make_manager
-    from tests.test_usb_transport import ID
+    from tests.support.device_coordinator import manager as make_manager
+    from tests.support.usb_transport import ID
     from codexmeter.device_registry import DeviceConfig
     async def run():
         s=UsbSession(discovered(),H,channel_factory=FakeChannel)

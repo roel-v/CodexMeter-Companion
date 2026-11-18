@@ -4,7 +4,7 @@ import pytest
 from codexmeter.companion_protocol import NegotiatedIdentity, ProtocolError
 from codexmeter.companion_session import read_identity, IdentityIncompatible
 from codexmeter.device_policy import SUPPORTED_MODELS, require_supported, is_busy
-from tests.test_usb_protocol import identity_data
+from tests.support.usb_protocol import identity_data
 
 
 @pytest.mark.parametrize('transport',['usb','bluetooth'])
@@ -46,7 +46,7 @@ def test_busy_policy():
 
 @pytest.mark.parametrize('owner',[None,0,2,True])
 def test_declared_ble_negotiation_never_downgrades_to_legacy(owner):
-    from tests.test_ble import FakeLifecycleClient, FakeClientTransport
+    from tests.support.ble import FakeLifecycleClient, FakeClientTransport
     from codexmeter.delivery import DeliveryState
     raw=identity_data()
     if owner is not None: raw['ble_owner']=owner

@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from codexmeter.usage_report import publish_report, report_lines
 from codexmeter.provider import CodexUsageProvider
-from tests.test_provider import FakeClient, FakeLocalUsageReader
+from tests.support.provider import FakeClient, FakeLocalUsageReader
 
 NOW = dt.datetime(2026, 11, 18, 12, tzinfo=dt.timezone.utc)
 PART = dict(total_tokens=10,tokens=[1,2,7],cost_micro_usd=[1,2,3],unpriced_tokens=0,unknown_tokens=0,models={})

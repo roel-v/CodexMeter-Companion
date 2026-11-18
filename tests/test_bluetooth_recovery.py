@@ -144,7 +144,7 @@ def test_discovery_loop_feeds_monitor_and_clears_failed_scan_evidence(tmp_path, 
                 assert not calls  # Error at scan 3 restarted the two-minute window.
             if scans == 6: stop.set()
         discovery.after_scan = after_scan
-        from tests.test_device_coordinator import manager, ID
+        from tests.support.device_coordinator import manager, ID
         from codexmeter.device_registry import DeviceConfig
         async def available(): return True, None
         async def no_wait(*args): await asyncio.sleep(0)

@@ -3,7 +3,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import pytest
-from tests.test_usb_transport import ID, B
+from tests.support.usb_transport import ID, B
 
 spec=importlib.util.spec_from_file_location('maintenance_tool',Path(__file__).parents[1]/'tools'/'maintenance.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)

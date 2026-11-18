@@ -74,19 +74,13 @@ class LocalTokenUsageReader:
             tzinfo=local_now.tzinfo,
         ).timestamp()
         candidates: set[Path] = set()
-        try:
-            paths = (path for root in roots for path in root.rglob("*.jsonl"))
-            for path in paths:
-                try:
-                    stat = path.stat()
-                except OSError:
-                    raise
-                if stat.st_mtime < day_start:
-                    continue
-                candidates.add(path)
-                self._scan_file(path, stat.st_ino, first_date, target_date, local_now.tzinfo)
-        except OSError:
-            raise
+        paths = (path for root in roots for path in root.rglob("*.jsonl"))
+        for path in paths:
+            stat = path.stat()
+            if stat.st_mtime < day_start:
+                continue
+            candidates.add(path)
+            self._scan_file(path, stat.st_ino, first_date, target_date, local_now.tzinfo)
 
         for path in tuple(self._states):
             if path not in candidates:
@@ -118,57 +112,51 @@ class LocalTokenUsageReader:
         timezone: dt.tzinfo,
     ) -> None:
         state = self._states.get(path)
-        try:
-            size = path.stat().st_size
-        except OSError:
-            raise
+        size = path.stat().st_size
         if state is None or state.inode != inode or size < state.offset:
             state = _SessionFileState(inode=inode)
             self._states[path] = state
 
         state.invalid = False
-        try:
-            with path.open(encoding="utf-8") as handle:
-                handle.seek(state.offset)
-                while True:
-                    line_start = handle.tell()
-                    line = handle.readline(65536)
-                    if len(line) == 65536 and not line.endswith("\n"):
-                        candidate = '"token_usage_record"' in line[:1024] or '"token_count"' in line[:1024]
-                        tail = line
-                        while tail and not tail.endswith("\n"):
-                            tail = handle.readline(65536)
-                        if not tail:
-                            handle.seek(line_start)
-                            break
-                        if candidate:
-                            from .compatibility import ContractError
-                            state.invalid = True
-                            raise ContractError(field="tokens")
-                        state.offset = handle.tell()
-                        continue
-                    if not line:
-                        break
-                    if not line.endswith("\n"):
+        with path.open(encoding="utf-8") as handle:
+            handle.seek(state.offset)
+            while True:
+                line_start = handle.tell()
+                line = handle.readline(65536)
+                if len(line) == 65536 and not line.endswith("\n"):
+                    candidate = '"token_usage_record"' in line[:1024] or '"token_count"' in line[:1024]
+                    tail = line
+                    while tail and not tail.endswith("\n"):
+                        tail = handle.readline(65536)
+                    if not tail:
                         handle.seek(line_start)
                         break
-                    from .compatibility_readers import validate_usage_line
-                    try:
-                        validate_usage_line(line)
-                    except ValueError:
+                    if candidate:
+                        from .compatibility import ContractError
                         state.invalid = True
-                        raise
+                        raise ContractError(field="tokens")
                     state.offset = handle.tell()
-                    self._capture_session_meta(line, state)
-                    if '"turn_context"' in line:
-                        self._capture_turn(line, state)
-                    if '"token_usage_record"' in line:
-                        self._apply_usage_record(line, state, first_date, target_date, timezone)
-                    if '"token_count"' not in line:
-                        continue
-                    self._apply_token_event(line, state, first_date, target_date, timezone)
-        except OSError:
-            raise
+                    continue
+                if not line:
+                    break
+                if not line.endswith("\n"):
+                    handle.seek(line_start)
+                    break
+                from .compatibility_readers import validate_usage_line
+                try:
+                    validate_usage_line(line)
+                except ValueError:
+                    state.invalid = True
+                    raise
+                state.offset = handle.tell()
+                self._capture_session_meta(line, state)
+                if '"turn_context"' in line:
+                    self._capture_turn(line, state)
+                if '"token_usage_record"' in line:
+                    self._apply_usage_record(line, state, first_date, target_date, timezone)
+                if '"token_count"' not in line:
+                    continue
+                self._apply_token_event(line, state, first_date, target_date, timezone)
 
     @staticmethod
     def _capture_turn(line, state):

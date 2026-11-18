@@ -15,16 +15,7 @@ from codexmeter.ble_discovery import DiscoveryService
 from codexmeter.payloads import Payload
 from codexmeter.queueing import put_latest
 from codexmeter.device_dialog import device_row
-
-
-def config(index=1, model='spotpear_ball_v2'):
-    return DeviceConfig(f'codexmeter-aabbcc{index:06x}', short_id='AABBCC', name='CodexMeter-AABBCC',
-                        metadata=DeviceMetadata(model=model,protocol=1,capabilities=('brightness','rotation','screen')))
-
-
-def manager(configs):
-    return DeviceManager(configs,connect_timeout_sec=.1,disconnect_timeout_sec=.1,write_timeout_sec=.1,
-                         ack_timeout_sec=.1,notify_timeout_sec=.1,healthcheck_interval_sec=1)
+from tests.support.mixed_displays import config, manager
 
 
 def test_registry_does_not_merge_duplicate_advertised_names(tmp_path):

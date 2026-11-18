@@ -399,7 +399,6 @@ class DeviceManager:
                     from .usb_transport import UsbDiscovery, inspect_maintenance_identity
                     rediscovery = UsbDiscovery()
                     await rediscovery.scan_once()
-                    found = rediscovery.find(slot.config)
                     matches = [d.candidate.port for d in rediscovery.devices.values()
                                if d.identity.device_id == device_id]
                     matches += [d['port'] for d in rediscovery.unsupported.values()

@@ -4,8 +4,8 @@ import pytest
 from codexmeter.events import EventServer
 from codexmeter.delivery_pump import DeliveryPump
 from codexmeter.payloads import Payload
-from tests.test_mixed_displays import manager, config
-from tests.test_usb_transport import UsbSession, discovered, FakeChannel, H, B
+from tests.support.mixed_displays import manager, config
+from tests.support.usb_transport import UsbSession, discovered, FakeChannel, H, B
 from codexmeter.command_results import CommandResults
 from codexmeter.delivery import negotiated_replay, sweep_commands
 from codexmeter.transport_types import TransportError
