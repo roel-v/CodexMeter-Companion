@@ -51,15 +51,8 @@ class SerialSession:
 
     def __enter__(self) -> "SerialSession":
         if sys.platform == "win32":
-            import serial
-            self.serial = serial.Serial()
-            self.serial.port = self.port
-            self.serial.baudrate = 115200
-            self.serial.timeout = 0.25
-            self.serial.write_timeout = 2
-            self.serial.dtr = False
-            self.serial.rts = False
-            self.serial.open()
+            from codexmeter.serial_backend import open_serial
+            self.serial = open_serial(self.port, timeout=.25, write_timeout=2)
             if self.flush_input:
                 self.serial.reset_input_buffer()
             return self

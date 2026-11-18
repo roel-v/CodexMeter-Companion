@@ -54,6 +54,7 @@ if __name__ == "__main__":
     parser.add_argument("port")
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
-    with SerialSession(args.port) as serial:
+    from maintenance import MaintenanceGuard
+    with MaintenanceGuard(args.port), SerialSession(args.port) as serial:
         capture(serial, args.output)
     print(args.output)

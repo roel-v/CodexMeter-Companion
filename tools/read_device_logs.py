@@ -46,10 +46,17 @@ def clear_logs(port: str, *, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> None:
                 return
 
 
-def follow_logs(port: str, *, timeout: float = 3600.0) -> None:
+def follow_logs(port: str, *, timeout: float = 3600.0, guard=None) -> None:
     with SerialSession(port, flush_input=False) as serial:
         while True:
-            line = serial.read_line(timeout).decode("utf-8", errors="replace")
+            if guard:
+                guard.renew(serial)
+            try:
+                line = serial.read_line(min(timeout, .5) if guard else timeout).decode("utf-8", errors="replace")
+            except SerialToolError:
+                if guard:
+                    continue
+                raise
             print(line, flush=True)
 
 
@@ -81,19 +88,21 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return 0
         port = resolve_port(args.port, device=args.device, timeout=args.timeout)
-        if args.clear:
-            clear_logs(port, timeout=args.timeout)
-            print(f"Cleared device logs on {port}")
-        if args.follow:
-            print(f"Following device logs on {port}; press Ctrl-C to stop.", file=sys.stderr)
-            follow_logs(port)
-            return 0
-        for line in read_logs(port, lines=args.lines, timeout=args.timeout):
-            print(line)
+        from maintenance import MaintenanceGuard
+        with MaintenanceGuard(port) as guard:
+            if args.clear:
+                clear_logs(port, timeout=args.timeout)
+                print(f"Cleared device logs on {port}")
+            if args.follow:
+                print(f"Following device logs on {port}; press Ctrl-C to stop.", file=sys.stderr)
+                follow_logs(port, guard=guard)
+                return 0
+            for line in read_logs(port, lines=args.lines, timeout=args.timeout):
+                print(line)
         return 0
     except KeyboardInterrupt:
         return 130
-    except (SerialToolError, OSError) as exc:
+    except (SerialToolError, OSError, RuntimeError) as exc:
         print(f"Read logs failed: {exc}", file=sys.stderr)
         return 1
 

@@ -152,15 +152,15 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return 0
         port = resolve_port(args.port, device=args.device, timeout=args.line_timeout)
-        width, height, data = capture_rgb565le(
-            port,
-            line_timeout=args.line_timeout,
-            raw_timeout=args.raw_timeout,
-            pre_commands=args.command,
-        )
+        from maintenance import MaintenanceGuard
+        with MaintenanceGuard(port):
+            width, height, data = capture_rgb565le(
+                port, line_timeout=args.line_timeout, raw_timeout=args.raw_timeout,
+                pre_commands=args.command,
+            )
         output = Path(args.output)
         output.write_bytes(rgb565le_to_png(width, height, data))
-    except (SerialToolError, OSError, ValueError) as exc:
+    except (SerialToolError, OSError, ValueError, RuntimeError) as exc:
         print(f"Screenshot capture failed: {exc}", file=sys.stderr)
         return 1
 

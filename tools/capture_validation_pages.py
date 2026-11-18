@@ -1,0 +1,30 @@
+"""Capture actual current frame/pages under same-host companion maintenance.
+
+No demo rendering is used; caller supplies telemetry through the companion first.
+Three local swipes return to the original page. Tokens remain private in memory.
+"""
+import argparse,time
+from pathlib import Path
+from maintenance import MaintenanceGuard
+from serial_device import SerialSession
+
+def run(args):
+    args.output.mkdir(parents=True,exist_ok=True)
+    with MaintenanceGuard(args.port):
+        if args.c6:
+            from capture_c6_screen import capture
+            with SerialSession(args.port) as serial:
+                capture(serial,args.output/'page-0.png')
+                serial.write_line('test_swipe');time.sleep(.3)
+                serial.write_line('test_tap_today');time.sleep(.3);capture(serial,args.output/'page-1.png')
+                serial.write_line('test_tap_week');time.sleep(.3);capture(serial,args.output/'page-2.png')
+                serial.write_line('test_swipe');time.sleep(.3)
+        else:
+            from capture_screenshot import capture_rgb565le,rgb565le_to_png
+            for page in range(3):
+                commands=[] if page==0 else ['test_swipe']
+                width,height,data=capture_rgb565le(args.port,pre_commands=commands)
+                (args.output/f'page-{page}.png').write_bytes(rgb565le_to_png(width,height,data))
+            with SerialSession(args.port) as serial:serial.write_line('test_swipe');time.sleep(.3)
+if __name__=='__main__':
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('port');p.add_argument('output',type=Path);p.add_argument('--c6',action='store_true');run(p.parse_args())
