@@ -7,7 +7,7 @@ import time
 from .transport_types import ConnectionWorker
 
 log = logging.getLogger(__name__)
-BUSY = ('busy_usb', 'busy_ble', 'busy_maintenance')
+from .device_policy import is_busy
 
 
 class DeviceCoordinator:
@@ -83,7 +83,7 @@ class DeviceCoordinator:
                 self.task = None
                 self.worker: ConnectionWorker | None = None
                 self.kind = None
-                busy = any(value in error for value in BUSY)
+                busy = is_busy(error)
                 self.failures[kind] += 1
                 self.retry_at[kind] = self.clock() + (2 if busy else min(
                     16 if kind == 'usb' else 8, 2 ** min(self.failures[kind]-1, 4)))

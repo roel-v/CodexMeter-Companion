@@ -34,3 +34,6 @@ Actual Tk widgets exercised with isolated IPC: queued/conflict/explicit retry, a
 ### Phase 5
 Shared runner owns open/reconciliation/replay/queue consumption and logical disconnect/close. Adapters retain discovery, physical connection and invalidation. Manager resolves one host identity lazily for initial/dynamic BLE, USB and maintenance. Existing transport/coordinator/result suites: 64 passed; new parameterized adapter open/policy failure, normal stop and cancellation checks: 8 passed. No hardware touched.
 
+### Phase 6
+Separated structural identity parsing from explicit model/application/transport support. Unsupported identities remain surfaced before claims; no new model is accepted. Shared busy classification and application compatibility. Updated old codec tests to exercise the policy boundary; 85 focused cases passed, including all three models on both transports with empty/partial controls and unsupported declarations. Initial test import error corrected before passing run.
+

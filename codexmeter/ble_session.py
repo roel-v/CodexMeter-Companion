@@ -8,6 +8,7 @@ from .companion_session import CompanionSession
 from .transport_types import Endpoint, TransportError
 from .companion_protocol import NegotiatedIdentity, ProtocolError, MAX_FRAME
 from .settings import RX_CHAR_UUID, TX_CHAR_UUID
+from .device_policy import require_supported
 
 
 BLE_ATT_VALUE_LIMIT = 512
@@ -129,6 +130,7 @@ class BleSession(CompanionSession):
             b"IDENTITY "
             + __import__("json").dumps(identity.raw, separators=(",", ":")).encode()
         )
+        require_supported(parsed, "bluetooth")
         super().__init__(
             parsed,
             host_id,

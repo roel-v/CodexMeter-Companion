@@ -9,7 +9,7 @@ import re
 from typing import Any
 
 MAX_IDENTITY_BYTES = 512
-SUPPORTED_PROTOCOL = 1
+from .device_policy import application_supported
 _TOKEN = re.compile(r"[a-z][a-z0-9_-]{0,47}\Z")
 
 
@@ -24,7 +24,7 @@ class DeviceMetadata:
 
     @property
     def compatible(self) -> bool:
-        return self.protocol is None or self.protocol == SUPPORTED_PROTOCOL
+        return application_supported(self.protocol)
 
     @property
     def compatibility(self) -> str:

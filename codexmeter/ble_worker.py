@@ -64,7 +64,8 @@ class DeviceWorker:
     def _record_failure(self, error: str) -> None:
         state = self.slot.state
         state.connected = False
-        if not any(value in error for value in ("busy_usb", "busy_ble", "busy_maintenance")):
+        from .device_policy import is_busy
+        if not is_busy(error):
             state.consecutive_failures += 1
             state.ble_failures += 1
         state.last_error = error

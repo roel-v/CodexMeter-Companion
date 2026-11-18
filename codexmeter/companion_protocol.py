@@ -93,15 +93,15 @@ class NegotiatedIdentity:
             raise ProtocolError("invalid full device identity")
         if (
             type(data.get("usb")) is not int
-            or data["usb"] != 1
+            or not 1 <= data["usb"] <= 65535
             or type(data.get("app")) is not int
-            or data["app"] != 1
+            or not 1 <= data["app"] <= 65535
         ):
-            raise ProtocolError("USB firmware upgrade required (wire/app v1)")
+            raise ProtocolError("invalid wire/application version")
         if not isinstance(data.get("boot"), str) or not BOOT.fullmatch(data["boot"]):
             raise ProtocolError("invalid boot identity")
-        if data.get("model") not in ("waveshare_c6_amoled_216", "spotpear_ball_v2", "waveshare_amoled_216"):
-            raise ProtocolError("unsupported display model")
+        if not isinstance(data.get("model"), str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", data["model"]):
+            raise ProtocolError("invalid display model")
         fw = data.get("fw")
         if (
             not isinstance(fw, str)
@@ -114,9 +114,8 @@ class NegotiatedIdentity:
         if (
             not isinstance(caps, list)
             or any(not isinstance(c, str) for c in caps)
-            or not {"brightness", "rotation", "screen"}.issubset(caps)
         ):
-            raise ProtocolError("missing USB capabilities")
+            raise ProtocolError("invalid declared capabilities")
         for key in ("short_id", "name"):
             if key in data and (
                 not isinstance(data[key], str) or not data[key] or len(data[key]) > 64

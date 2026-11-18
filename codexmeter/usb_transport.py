@@ -597,7 +597,8 @@ async def inspect_maintenance_identity(port):
                     if not isinstance(short_id, str) or not short_id or raw.get('name') != 'CodexMeter-' + short_id:
                         raise TransportError('Legacy maintenance identity incomplete')
                     return raw, True
-                NegotiatedIdentity.parse(line)  # Malformed/unsupported updated firmware is never legacy.
+                from .device_policy import require_supported
+                require_supported(NegotiatedIdentity.parse(line), "usb")  # Never downgrade declarations to legacy.
                 return raw, False
         raise TransportError('Maintenance identity unavailable')
     finally:

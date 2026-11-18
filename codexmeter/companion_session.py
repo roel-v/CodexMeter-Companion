@@ -9,6 +9,7 @@ from .companion_protocol import (NegotiatedIdentity, ProtocolError, encode_contr
                                  encode_data, parse_reply, object_json, FULL_ID, UINT32)
 from .transport_types import (DeliveryResult, Endpoint, WireChannel, TransportError, UnknownDelivery)
 from .payloads import Payload
+from .device_policy import require_supported
 
 
 class IdentityIncompatible(ProtocolError):
@@ -17,7 +18,7 @@ class IdentityIncompatible(ProtocolError):
         self.device_id = device_id
 
 
-async def read_identity(channel: WireChannel, timeout=1.0) -> NegotiatedIdentity:
+async def read_identity(channel: WireChannel, timeout=1.0, *, transport="usb") -> NegotiatedIdentity:
     await channel.write(b"identity\n")
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
@@ -26,7 +27,7 @@ async def read_identity(channel: WireChannel, timeout=1.0) -> NegotiatedIdentity
         )
         if line.startswith(b"IDENTITY "):
             try:
-                return NegotiatedIdentity.parse(line)
+                return require_supported(NegotiatedIdentity.parse(line), transport)
             except ProtocolError as exc:
                 basic = object_json(line[9:])
                 identity = basic.get("device_id")
@@ -77,7 +78,7 @@ class CompanionSession:
         try:
             self.channel = self.channel_factory()
             await self.channel.open()
-            identity = await read_identity(self.channel)
+            identity = await read_identity(self.channel, transport=self.transport)
             if (
                 identity.device_id != self.identity.device_id
                 or identity.boot != self.identity.boot

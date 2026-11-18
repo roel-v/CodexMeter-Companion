@@ -87,10 +87,11 @@ def identity_data():
     ],
 )
 def test_incompatible_identity_is_never_legacy(change):
+    from codexmeter.device_policy import require_supported
     with pytest.raises(ProtocolError):
-        NegotiatedIdentity.parse(
+        require_supported(NegotiatedIdentity.parse(
             b"IDENTITY " + json.dumps({**identity_data(), **change}).encode()
-        )
+        ), 'usb')
 
 
 def test_maximum_application_keeps_exact_bytes():

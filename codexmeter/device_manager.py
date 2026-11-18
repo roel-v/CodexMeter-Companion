@@ -16,6 +16,7 @@ from .delivery import remember_desired, discard_intents, sweep_commands
 from .queueing import put_latest
 from .settings import DEVICE_NAME, AUTO_SCREEN_TIMEOUT_SEC
 from .supervision import supervise
+from .device_policy import is_busy
 
 log = logging.getLogger(__name__)
 IdentityObserver = Callable[[DeviceConfig, DeviceIdentity], DeviceConfig]
@@ -280,7 +281,7 @@ class DeviceManager:
         status = self.status()
         devices = [d for d in status['devices'] if d.get('enabled') and
             d.get('connection_state') not in ('owned_elsewhere', 'maintenance') and
-            not any(busy in (d.get('last_error') or '') for busy in ('busy_usb', 'busy_ble', 'busy_maintenance')) and
+            not is_busy(d.get('last_error')) and
             d.get('connection_mode') != 'usb_only' and
             (d.get('ble_failures', 0) > 0 or (d.get('connected') and d.get('transport') == 'bluetooth')) and
             not (d.get('connected') and d.get('transport') == 'usb') and
