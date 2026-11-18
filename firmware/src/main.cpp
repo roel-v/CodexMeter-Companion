@@ -171,7 +171,42 @@ static void log_lvgl_mem(const char* phase) {
       mon.used_pct, mon.frag_pct);
 }
 
+static void kick_usb_tx() {
+#if ARDUINO_USB_MODE == 1 && SOC_USB_SERIAL_JTAG_SUPPORTED
+  if (HWCDC::isPlugged()) {
+    usb_serial_jtag_ll_txfifo_flush();
+    usb_serial_jtag_ll_ena_intr_mask(USB_SERIAL_JTAG_INTR_SERIAL_IN_EMPTY);
+  }
+#endif
+}
+
+#ifndef BOARD_HAS_PSRAM
 static bool capture_tiles = false;
+static bool capture_write(const uint8_t* data, size_t size) {
+  uint32_t progress = millis();
+  while (size) {
+    kick_usb_tx();
+#if ARDUINO_USB_MODE == 1 && SOC_USB_SERIAL_JTAG_SUPPORTED
+    bool ready = bool(Serial);
+#else
+    bool ready = true;
+#endif
+    size_t capacity = ready ? Serial.availableForWrite() : 0;
+    size_t chunk = size < 64 ? size : 64;
+    if (chunk > capacity) chunk = capacity;
+    size_t sent = chunk ? Serial.write(data, chunk) : 0;
+    if (sent) { data += sent; size -= sent; progress = millis(); }
+    else {
+      if (millis() - progress >= 1000) return false;
+      feed_watchdog(); delay(1);
+    }
+  }
+  return true;
+}
+static bool capture_text(const char* text) {
+  return capture_write(reinterpret_cast<const uint8_t*>(text), strlen(text));
+}
+#endif
 
 static void lv_flush(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
   if (!screen_on) {
@@ -181,22 +216,17 @@ static void lv_flush(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map)
 
   int32_t w = area->x2 - area->x1 + 1;
   int32_t h = area->y2 - area->y1 + 1;
+#ifndef BOARD_HAS_PSRAM
   if (capture_tiles) {
     const size_t bytes = w * h * sizeof(uint16_t);
-    Serial.printf("TILE %ld %ld %ld %ld %u %lu\n", (long)area->x1, (long)area->y1,
-                  (long)w, (long)h, (unsigned)bytes,
-                  (unsigned long)esp_rom_crc32_le(0, px_map, bytes));
-    size_t sent = 0;
-    while (sent < bytes) {
-      const size_t chunk = bytes - sent > 1024 ? 1024 : bytes - sent;
-      size_t written = Serial.write(px_map + sent, chunk);
-      if (!written) { capture_tiles = false; break; }
-      sent += written;
-      delay(1);
-    }
-    Serial.println();
+    char header[96];
+    snprintf(header, sizeof(header), "TILE %ld %ld %ld %ld %u %lu\n",
+             (long)area->x1, (long)area->y1, (long)w, (long)h, (unsigned)bytes,
+             (unsigned long)esp_rom_crc32_le(0, px_map, bytes));
+    capture_tiles = capture_text(header) && capture_write(px_map, bytes) && capture_text("\n");
     feed_watchdog();
   }
+#endif
   display_rotation_draw(
       gfx, area->x1, area->y1, w, h, (uint16_t*)px_map, orientation_rotation_quadrant());
   lv_display_flush_ready(disp);
@@ -533,12 +563,14 @@ static void send_screenshot() {
 #ifndef BOARD_HAS_PSRAM
   if (!screen_on) { Serial.println("SCREENSHOT_SCREEN_OFF"); return; }
   device_log_serial_enabled(false);
-  Serial.flush();
-  Serial.printf("TILED_SCREENSHOT_START %d %d\n", CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H);
-  capture_tiles = true;
-  lv_obj_invalidate(lv_screen_active());
-  lv_refr_now(nullptr);
-  Serial.println(capture_tiles ? "TILED_SCREENSHOT_END" : "TILED_SCREENSHOT_FAILED");
+  char header[64];
+  snprintf(header, sizeof(header), "TILED_SCREENSHOT_START %d %d\n", CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H);
+  capture_tiles = capture_text(header);
+  if (capture_tiles) {
+    lv_obj_invalidate(lv_screen_active());
+    lv_refr_now(nullptr);
+  }
+  capture_text(capture_tiles ? "TILED_SCREENSHOT_END\n" : "TILED_SCREENSHOT_FAILED\n");
   capture_tiles = false;
   device_log_serial_enabled(true);
   return;
@@ -806,16 +838,8 @@ static void queue_usb_reply(const char* text, const char* prefix = "") {
   usb_tx_boundary = false; usb_tx_size = n; usb_tx_pos = 0; usb_tx_started = millis();
 }
 static void service_usb_tx() {
-#if ARDUINO_USB_MODE == 1 && SOC_USB_SERIAL_JTAG_SUPPORTED
-  // Pinned Arduino3.3.8 HWCDC::availableForWrite() only observes free ring
-  // space. A full ring can otherwise prevent reaching write(), which normally
-  // arms IN_EMPTY. Kick the existing ISR without writing beyond capacity,
-  // waiting, flushing queued bytes, or interpreting USB presence as ownership.
-  if(HWCDC::isPlugged()) {
-    usb_serial_jtag_ll_txfifo_flush();
-    usb_serial_jtag_ll_ena_intr_mask(USB_SERIAL_JTAG_INTR_SERIAL_IN_EMPTY);
-  }
-#endif
+  // Shared with bulk captures: arm the ISR without flushing queued bytes.
+  kick_usb_tx();
   // Pump even after the final bytes entered the driver's ring: queued bytes
   // are not evidence that the host has received them.
   if (!usb_tx_size) return;

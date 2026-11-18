@@ -163,3 +163,15 @@ It does not wait on unrelated ports or bypass port exclusivity. Validation: 37 U
 including cancellation during native open, verified handle disposal and immediate reopening after pause returns.
 A separate rejected C6 screenshot CRC exposed missing capture-tool page cleanup; the tool now restores overview
 in finally, with a regression test. Rejected images remain failures, and failed runs remain retained.
+
+### C6 bulk screenshot writer
+
+Retained rejected-tile evidence established byte loss rather than a bad renderer: a 19,200-byte tile contained the
+next TILE header at byte 15,819. The pinned HWCDC bulk-write path can discard queued bytes on a connection/buffer
+stall. C6 captures now wait for the public connection-ready state, write at most 64 bytes within available ring
+capacity, and bound stalled progress. Header/body/end markers use the same writer; the ISR kick is shared with
+normal telemetry. The tiled-capture flag/code is compiled only for non-PSRAM boards. Wire formats and CRC checks
+are unchanged. All three production targets compiled; native protocol/view tests passed. Both application images
+were flashed with full identity and rollback-hash verification, and three complete C6 live-page captures passed.
+The first Ball flash attempt refused to write when identity was unavailable; an explicit identity recheck and Resume
+preceded the successful retry. No identity check was bypassed. Final repeated transport captures follow below.
