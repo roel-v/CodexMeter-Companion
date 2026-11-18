@@ -200,7 +200,7 @@ class BleTransport:
         *,
         require_identity: bool = False,
         identity_validator: Callable[[DeviceIdentity], None] | None = None,
-    ) -> bool:
+    ) -> None:
         from bleak.exc import BleakError
 
         refresh_requested = asyncio.Event()
@@ -218,7 +218,6 @@ class BleTransport:
 
         display = getattr(target, "address", str(target))
         log.info("Connecting to %s", display)
-        used_successfully = False
         client = self._create_client(target)
         loop = asyncio.get_running_loop()
         try:
@@ -261,19 +260,16 @@ class BleTransport:
                 for reconnect_control in (state.desired_control, state.desired_policy or state.connect_control):
                     if reconnect_control is not None and should_send(reconnect_control, state):
                         await self._write_payload(client, reconnect_control, ack_tracker, state)
-                        used_successfully = True
                 for setting in list(state.desired_settings.values()):
                     await self._write_payload(client, setting, ack_tracker, state)
                 if state.last_usage is not None:
                     await self._write_payload(
                         client, state.last_usage, ack_tracker, state
                     )
-                    used_successfully = True
                 if state.last_activity is not None:
                     await self._write_payload(
                         client, state.last_activity, ack_tracker, state
                     )
-                    used_successfully = True
                 if state.pending_alert is not None and not should_send(state.pending_alert, state):
                     state.pending_alert = None
                 if state.pending_alert is not None:
@@ -281,7 +277,6 @@ class BleTransport:
                     await self._write_reliably(
                         client, pending_alert, ack_tracker, state
                     )
-                    used_successfully = True
 
                 while client.is_connected and not stop_event.is_set():
                     payload_task = asyncio.create_task(queue.get())
@@ -314,14 +309,12 @@ class BleTransport:
                                 state.pending_alert = None
                             continue
                         await self._write_reliably(client, payload, ack_tracker, state)
-                        used_successfully = True
                         continue
                     if refresh_task in done and refresh_requested.is_set():
                         refresh_requested.clear()
                         for snapshot in (state.last_usage, state.last_activity):
                             if snapshot is not None and telemetry_fresh(snapshot, state):
                                 await self._write_payload(client, snapshot, ack_tracker, state)
-                                used_successfully = True
                         continue
                     if health_task in done:
                         heartbeat = next((p for p in (state.last_usage, state.last_activity)
@@ -329,7 +322,6 @@ class BleTransport:
                         if heartbeat is not None:
                             log.info("BLE health check with %s payload", heartbeat.kind)
                             await self._write_payload(client, heartbeat, ack_tracker, state)
-                            used_successfully = True
             finally:
                 state.connected = False
                 state.last_disconnected_at = loop.time()
@@ -337,7 +329,6 @@ class BleTransport:
             active = False
             await self._disconnect(client, display)
             log.info("BLE disconnected from %s", display)
-        return used_successfully
 
     async def _negotiated(self, client, identity, queue, state, stop_event):
         from .ble_session import BleSession
@@ -349,7 +340,6 @@ class BleTransport:
             await run_session(session, state, queue, stop_event, transport="bluetooth",
                               on_reconciled=getattr(self, 'on_reconciled', None),
                               available=lambda: client.is_connected)
-            return True
         finally:
             self.session = None
 
@@ -362,8 +352,8 @@ class BleTransport:
         *,
         require_identity: bool = False,
         identity_validator: Callable[[DeviceIdentity], None] | None = None,
-    ) -> bool:
-        return await self._connect_and_write(
+    ) -> None:
+        await self._connect_and_write(
             target,
             queue,
             state,

@@ -50,7 +50,7 @@ def test_explicit_control_expires_while_waiting_for_serialization():
             p = Payload('control',{'k':'control','cmd':'brightness','value':40})
             state.explicit_intents[id(p)] = (B, 1, 10.0)
             state.explicit_payloads[id(p)] = p
-            async with s.exclusive_delivery():
+            async with s._send_lock:  # Hold the real dispatch lock to exercise final-send expiry.
                 task = asyncio.create_task(DeliveryPump(state,s).deliver(p))
                 await asyncio.sleep(0)
                 now[0] = 70.0

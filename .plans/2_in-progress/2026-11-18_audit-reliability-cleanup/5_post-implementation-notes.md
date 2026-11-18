@@ -37,3 +37,6 @@ Shared runner owns open/reconciliation/replay/queue consumption and logical disc
 ### Phase 6
 Separated structural identity parsing from explicit model/application/transport support. Unsupported identities remain surfaced before claims; no new model is accepted. Shared busy classification and application compatibility. Updated old codec tests to exercise the policy boundary; 85 focused cases passed, including all three models on both transports with empty/partial controls and unsupported declarations. Initial test import error corrected before passing run.
 
+### Phase 7 scaffolding
+Removed unconsumed discovery events/wait API and wait_any, ignored legacy success bookkeeping, and test-only exclusive_delivery. The dispatch-expiry test now holds the existing send lock directly. Discovery, legacy, coordinator, maintenance and audit regression suites: 79 passed.
+

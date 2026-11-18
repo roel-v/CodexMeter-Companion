@@ -64,7 +64,6 @@ class DiscoveryService:
         else:
             self._scanner = scanner
         self._devices: dict[str, DiscoveredDevice] = {}
-        self._changed = asyncio.Event()
         self._last_scan_at: float | None = None
         self._last_result_count = 0
         self._last_connected_result_count = 0
@@ -90,7 +89,6 @@ class DiscoveryService:
             device.source == "connected" for device in found
         )
         self._last_error = None
-        self._changed.set()
         log.debug("Discovered %d CodexMeter BLE device(s)", len(found))
         return found
 
@@ -111,24 +109,6 @@ class DiscoveryService:
                 self._connected_lookup.last_error if self._connected_lookup else None
             ),
         }
-
-    async def wait_for(
-        self,
-        config: DeviceConfig,
-        stop_event: asyncio.Event,
-    ) -> DiscoveredDevice | None:
-        while not stop_event.is_set():
-            match = self.find(config)
-            if match is not None:
-                return match
-            self._changed.clear()
-            try:
-                await asyncio.wait_for(
-                    _wait_any(self._changed.wait(), stop_event.wait()), timeout=10.0
-                )
-            except asyncio.TimeoutError:
-                pass
-        return None
 
     def find(self, config: DeviceConfig) -> DiscoveredDevice | None:
         now = time.monotonic()
@@ -229,4 +209,4 @@ async def scan_codexmeter_devices(
 
 
 
-from .async_utils import sleep_or_stop as _sleep_or_stop, wait_any as _wait_any
+

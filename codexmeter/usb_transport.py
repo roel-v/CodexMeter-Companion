@@ -365,7 +365,6 @@ class UsbDiscovery:
         self._retry = {}
         self._semaphore = asyncio.Semaphore(2)
         self._probing = set()
-        self._changed = asyncio.Event()
         self._last_candidates = set()
         self.last_error = None
         self.initial_scan = asyncio.Event()
@@ -480,7 +479,6 @@ class UsbDiscovery:
         finally:
             self._probing.discard(key)
             self._probe_tasks.pop(candidate.port, None)
-            self._changed.set()
 
     async def scan_once(self):
         try:

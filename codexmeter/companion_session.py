@@ -211,12 +211,6 @@ class CompanionSession:
             if self.channel:
                 await self.channel.close()
 
-    @contextlib.asynccontextmanager
-    async def exclusive_delivery(self):
-        """Fence new DATA writes while a caller quiesces and closes this session."""
-        async with self._send_lock:
-            yield
-
     @property
     def lifecycle(self):
         if self._closed:
