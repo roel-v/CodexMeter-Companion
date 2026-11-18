@@ -380,12 +380,10 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
     def status_provider() -> dict[str, object]:
         snapshot = manager.status()
         for device in snapshot.get("devices", []):
-            firmware = device.get("firmware", "")
             device["metric_validity"] = "supported" if "metric_validity" in device.get("capabilities", []) else "upgrade_required"
             if device["metric_validity"] != "supported":
                 device["metric_validity_note"] = (
                     "Update display firmware for correct unknown/partial task counts. Older Ball firmware may show zero.")
-        # Compatibility projection: old IPC/tray clients still read ble.
         status = {"devices": snapshot, "compatibility": monitor.snapshot()}
         if recovery is not None:
             status["bluetooth_recovery"] = recovery.status()
