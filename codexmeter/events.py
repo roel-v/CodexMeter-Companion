@@ -323,7 +323,7 @@ class EventServer:
             payload = self._telemetry_payload(event.get("payload"))
             await self.sink(payload)
             return {"ok": True, "queued": payload.kind}
-        if event_type in ('device_registry_update', 'devices_reload', 'device_mode', 'maintenance_acquire', 'maintenance_release', 'maintenance_resume'):
+        if event_type in ('command_result', 'device_state_refresh', 'device_registry_update', 'devices_reload', 'device_mode', 'maintenance_acquire', 'maintenance_release', 'maintenance_resume'):
             if self.device_operator is None:
                 raise ValueError('Device operations unavailable')
             return await self.device_operator(event)

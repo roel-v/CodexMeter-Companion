@@ -259,7 +259,7 @@ class CompanionSession:
         return dict(self.state)
 
     async def send(
-        self, payload: Payload, *, expected_boot=None, expected_revision=None, intent_deadline=None
+        self, payload: Payload, *, expected_boot=None, expected_revision=None, intent_deadline=None, on_dispatch=None
     ) -> DeliveryResult:
         async with self._send_lock:
             if self._seq > UINT32:
@@ -286,6 +286,10 @@ class CompanionSession:
             frame = encode_data(
                 self.identity.boot, self.token, seq, revision, payload.to_json_bytes()
             )
+            if self._closed or self.failure:
+                raise TransportError('Session unavailable before dispatch')
+            if on_dispatch is not None and not on_dispatch():
+                return DeliveryResult('rejected', self.transport, self.generation, None, 'Command no longer queued')
             try:
                 reply = await self._exchange(("seq", seq), frame, retry=True)
             except UnknownDelivery as exc:

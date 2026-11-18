@@ -24,6 +24,7 @@ MAX_ALERT_BODY_CHARS = 64
 class Payload:
     kind: str
     data: dict[str, Any]
+    command_id: str | None = None  # Host-only correlation; never serialized.
 
     def to_json_bytes(self) -> bytes:
         return encode_payload(self.data)

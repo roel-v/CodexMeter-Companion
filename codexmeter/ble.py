@@ -403,6 +403,32 @@ class BleTransport:
         return DeviceIdentity.from_bytes(raw)
 
     async def _write_payload(
+        self, client, payload, ack_tracker=None, state=None,
+    ):
+        if state is None or not payload.command_id:
+            return await self._write_legacy(client, payload, ack_tracker, state)
+        from .delivery import sweep_commands
+        sweep_commands(state)
+        generation = state.generation or 'legacy'
+        if not state.commands.start(payload, generation):
+            return
+        try:
+            await self._write_legacy(client, payload, ack_tracker, state)
+        except BaseException as exc:
+            state.commands.finish(payload, 'rejected' if isinstance(exc, BleAckError) else 'unknown',
+                                  str(exc) or 'Connection ended before acknowledgement', generation=generation)
+            sweep_commands(state)
+            raise
+        state.commands.finish(payload, 'applied', generation=generation)
+        # Legacy reconnect restores the acknowledged preference, not a new tracked user request.
+        restored = Payload(payload.kind, dict(payload.data))
+        if state.desired_control is payload:
+            state.desired_control = restored
+        if state.desired_settings.get(payload.data.get('cmd')) is payload:
+            state.desired_settings[payload.data['cmd']] = restored
+        sweep_commands(state)
+
+    async def _write_legacy(
         self,
         client: Any,
         payload: Payload,

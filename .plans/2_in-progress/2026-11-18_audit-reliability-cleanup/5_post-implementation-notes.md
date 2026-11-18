@@ -19,3 +19,11 @@ GC disabled. Focused reader/compatibility/chat tests: 50 passed, one inapplicabl
 Five new regressions demonstrated the endless noisy/blank stream and ignored failure markers. Capture now uses one
 monotonic header deadline, remaining read budgets and explicit failure handling. Before/exact-boundary, existing CRC,
 older headers, optional end marker and maintenance/page cleanup checks pass.
+
+## Phase 4 — backend
+
+Added bounded process-local command IDs/results without changing firmware payloads. Queue admission stays asynchronous.
+ACKs establish application; readback failures are separate. Unknown writes cannot replay in a new session. Unsent intents
+retain original deadlines, and expiry/supersession/ownership changes are recorded. Legacy ACKs use the same result contract.
+The original missing-result regression failed first; 110 focused delivery/IPC/legacy/maintenance tests now pass. New tests
+cover send-lock supersession, cancellation before/after dispatch, lost ACKs, durable rejection, retention and capacity.

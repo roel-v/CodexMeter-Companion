@@ -12,7 +12,7 @@ from .device_identity import DeviceIdentity
 from .ble import BleTransport
 from .device_registry import DeviceConfig, default_legacy_device, is_full_device_id, normalize_device_id
 from .payloads import Payload
-from .delivery import remember_desired, discard_intents
+from .delivery import remember_desired, discard_intents, sweep_commands
 from .queueing import put_latest
 from .settings import DEVICE_NAME, AUTO_SCREEN_TIMEOUT_SEC
 from .supervision import supervise
@@ -180,6 +180,9 @@ class DeviceManager:
             while not stop.is_set():
                 self._coordinators_init()
                 for coordinator in self.coordinators:
+                    sweep_commands(coordinator.slot.state)
+                    if not coordinator.slot.config.enabled:
+                        coordinator.slot.state.commands.cancel_queued('Display disabled or removed')
                     if coordinator not in tasks:
                         tasks[coordinator] = asyncio.create_task(coordinator.run(stop))
                     elif tasks[coordinator].done():
@@ -189,6 +192,9 @@ class DeviceManager:
             for task in tasks.values():
                 task.cancel()
             await asyncio.gather(*tasks.values(), return_exceptions=True)
+            for slot in self.slots:
+                slot.state.commands.cancel_queued('Companion stopped')
+                sweep_commands(slot.state)
 
     async def reload_devices(self):
         from .device_registry import DeviceRegistry
@@ -322,6 +328,22 @@ class DeviceManager:
         slot = coordinator.slot
         operation = event.get('type')
         async with coordinator.lock:
+            if operation == 'command_result':
+                command_id = event.get('command_id')
+                if not isinstance(command_id, str) or len(command_id) != 32 or any(
+                        c not in '0123456789abcdef' for c in command_id):
+                    raise ValueError('Invalid command ID')
+                sweep_commands(slot.state)
+                return {'ok': True, 'device_id': device_id, 'result': slot.state.commands.get(command_id)}
+            if operation == 'device_state_refresh':
+                session = coordinator.worker.session if coordinator.worker else None
+                if slot.config.maintenance or not slot.state.connected or session is None:
+                    raise ValueError('Connected negotiated display required to check settings')
+                current = await session.read_state()
+                if not slot.state.connected or session.failure:
+                    raise ValueError('Display disconnected while checking settings')
+                slot.state.device_state = {**current, 'boot': session.identity.boot}
+                return {'ok': True, 'device_id': device_id, 'state': dict(slot.state.device_state)}
             if operation == 'device_mode':
                 mode = event.get('connection_mode')
                 if mode not in CONNECTION_MODES:
@@ -452,10 +474,12 @@ class DeviceManager:
             data = {"k": "control", "cmd": command, "value": value}
         data["v"] = 1
         data["t"] = int(time.time())
-        payload = Payload("control", data)
+        import secrets
+        payload = Payload("control", data, secrets.token_hex(16))
+        slot.state.commands.admit(payload)
         for key,existing in list(slot.state.explicit_payloads.items()):
             if existing.data.get('cmd')==command:
-                slot.state.explicit_payloads.pop(key,None);slot.state.explicit_intents.pop(key,None)
+                discard_intents(slot.state, [existing])
         if slot.state.device_state:
             observed=slot.state.device_state
             if not slot.state.connected or not observed:
@@ -468,7 +492,7 @@ class DeviceManager:
             slot.state.explicit_payloads[id(payload)]=payload
         remember_desired(payload, slot.state)
         discard_intents(slot.state, await put_latest(slot.queue, payload))
-        return {"ok": True, "queued": command, "device_id": device_id}
+        return {"ok": True, "queued": command, "device_id": device_id, "command_id": payload.command_id}
 
     def set_connect_control(self, payload: Payload | None) -> None:
         for slot in self.slots:

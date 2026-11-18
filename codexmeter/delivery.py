@@ -7,16 +7,18 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 from .payloads import Payload
+from .command_results import CommandResults, INTENT_TTL_SEC, TERMINAL
 
 
 TELEMETRY_REPLAY_TTL_SEC = 300
 ALERT_TTL_SEC = 60
 PENDING_ALERT_CAPACITY = 8  # Host backlog; firmware deduplicates across reconnects.
-EXPLICIT_INTENT_TTL_SEC = 60
+EXPLICIT_INTENT_TTL_SEC = INTENT_TTL_SEC
 
 
 @dataclass
 class DeliveryState:
+    commands: CommandResults = field(default_factory=CommandResults)
     accepted_hashes: dict[str, str] = field(default_factory=dict)
     observed_at: dict[str, float] = field(default_factory=dict)
     alerts: list[tuple[float, Payload]] = field(default_factory=list)
@@ -169,6 +171,7 @@ def negotiated_replay(state: DeliveryState, *, same_host: bool, now=None):
     now = time.monotonic() if now is None else now
     prune_alerts(state, now=now)
     if not same_host:
+        state.commands.cancel_queued('Display ownership changed')
         state.alerts.clear()
         state.pending_alert = None
         state.explicit_intents.clear()
@@ -193,6 +196,10 @@ def negotiated_replay(state: DeliveryState, *, same_host: bool, now=None):
                 or boot != current.get("boot")
                 or revision != current.get("rev")
             ):
+                payload = state.explicit_payloads.get(key)
+                if payload:
+                    state.commands.finish(payload, 'expired' if now-created >= EXPLICIT_INTENT_TTL_SEC
+                                          else 'rejected', 'Display state changed before replay')
                 state.explicit_intents.pop(key, None)
                 state.explicit_payloads.pop(key, None)
             elif key in state.explicit_payloads:
@@ -204,6 +211,7 @@ def negotiated_replay(state: DeliveryState, *, same_host: bool, now=None):
 def discard_intents(state: DeliveryState, payloads):
     """Eviction is final: never replay an explicit request removed from the queue."""
     for payload in payloads:
+        state.commands.finish(payload, 'superseded', 'Replaced or removed from the queue')
         state.explicit_intents.pop(id(payload), None)
         state.explicit_payloads.pop(id(payload), None)
         if state.desired_control is payload:
@@ -213,6 +221,19 @@ def discard_intents(state: DeliveryState, payloads):
         command = payload.data.get("cmd")
         if state.desired_settings.get(command) is payload:
             state.desired_settings.pop(command, None)
+
+
+def sweep_commands(state):
+    """Expire commands even when disconnected and remove terminal replay references."""
+    state.commands.prune()
+    candidates = list(state.explicit_payloads.values()) + list(state.desired_settings.values())
+    if state.desired_control:
+        candidates.append(state.desired_control)
+    for payload in candidates:
+        if payload.command_id and not state.commands.queued(payload):
+            record = state.commands.records.get(payload.command_id)
+            if record is None or record.status in TERMINAL:
+                discard_intents(state, [payload])
 
 
 def telemetry_fresh(payload: Payload, state: DeliveryState, *, now=None) -> bool:
