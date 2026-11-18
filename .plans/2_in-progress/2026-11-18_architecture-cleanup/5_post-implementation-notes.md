@@ -134,3 +134,13 @@ verifies the identity before granting access. No identity check is removed. Vali
 and coordinator tests passed, including a no-probe-before-pause regression. Earlier failed runs and
 restoration logs remain retained. The high-rate initial fixture also observed a bounded serial-write
 failure and correctly refused maintenance until recovery; no process crash occurred.
+
+### Bluetooth maintenance data-preservation fix
+
+Independent pixel inspection rejected C6 Bluetooth captures that contained waiting/unknown data despite
+successful PNG transfers. The manager fenced/released BLE before claiming USB maintenance, changing the
+firmware's previous owner to None and defeating its same-host telemetry-preservation rule. It now claims
+maintenance first, then fences BLE; legacy devices and failed claims still fence safely. Validation: 36
+coordinator/maintenance tests passed, including an ordering regression with discovery already paused.
+The executable is rebuilt and the affected physical captures must be repeated; earlier transfer-only
+success records are not treated as visual acceptance.

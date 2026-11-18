@@ -386,3 +386,33 @@ def test_registry_adoption_rejects_mismatched_event_and_config_id():
                 'config':DeviceConfig('codexmeter-ffffffffffff').to_json()})
         assert len(m.slots)==1 and m.slots[0].config.device_id==ID
     asyncio.run(run())
+
+
+def test_ble_maintenance_preempts_before_releasing_owner_to_preserve_telemetry(monkeypatch):
+    async def run():
+        import codexmeter.usb_transport as usb_module
+        d=UsbDiscovery();d.devices['P']=discovered('P')
+        m=manager([DeviceConfig(ID)],usb_discovery=d)
+        m._coordinators_init();coordinator=m.coordinators[0]
+        coordinator.kind='bluetooth'
+        order=[]
+        async def fence():order.append('fence')
+        coordinator.fence=fence
+        async def inspect(port):return {'device_id':ID},False
+        class Session:
+            identity=SimpleNamespace(boot=B)
+            token='b'*32
+            async def close(self,release):
+                assert not release
+                order.append('close_maintenance_handle')
+        async def connect(*args):
+            assert 'fence' not in order
+            assert 'P' in d.paused_ports
+            order.append('claim_maintenance')
+            return Session()
+        monkeypatch.setattr(usb_module,'inspect_maintenance_identity',inspect)
+        monkeypatch.setattr(usb_module,'maintenance_connection',connect)
+        result=await m.device_operation({'type':'maintenance_acquire','device_id':ID,'tool':True})
+        assert result['ready']
+        assert order==['claim_maintenance','close_maintenance_handle','fence']
+    asyncio.run(run())

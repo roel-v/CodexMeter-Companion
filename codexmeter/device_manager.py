@@ -351,12 +351,14 @@ class DeviceManager:
                             record.update(lease)
                             await coordinator.fence()
                     else:
-                        await coordinator.fence()
+                        # Claim USB maintenance before releasing a live BLE owner.
+                        # Firmware can then preserve same-host telemetry atomically.
                         from .usb_transport import inspect_maintenance_identity
                         raw, legacy = await inspect_maintenance_identity(port)
                         if raw['device_id'] != device_id:
                             raise ValueError('Maintenance device identity mismatch')
                         if legacy:
+                            await coordinator.fence()
                             record.update(ready=True, quiescence='unsupported_legacy')
                             self._persist_config(slot, replace(slot.config, maintenance=record))
                             coordinator.transition('maintenance', 'Local pause; legacy firmware cannot quiesce other PCs')
@@ -365,6 +367,7 @@ class DeviceManager:
                             record['token'], device_id)
                         record.update(boot=session.identity.boot, token=session.token)
                         await session.close(release=False)
+                        await coordinator.fence()
                     record['ready'] = True
                     record['quiescence'] = 'device_maintenance'
                     self._persist_config(slot, replace(slot.config, maintenance=record))
