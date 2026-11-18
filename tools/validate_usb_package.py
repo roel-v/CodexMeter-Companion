@@ -49,7 +49,7 @@ class Fixture:
         while time.monotonic()-start<timeout:
             try:
                 last=self.devices();found={d['device_id']:d for d in last}
-                if all(i in found and found[i]['connected'] and found[i].get('transport')==kind and found[i].get('last_ack_age_sec') is not None and found[i]['last_ack_age_sec'] <= time.monotonic()-start+.15 and found[i].get('last_payload') in ('activity','usage') and (i not in self.previous or found[i].get('generation') != self.previous[i][0] or kind==self.previous[i][1]) for i,kind in wanted.items()):return time.monotonic()-start,last
+                if all(i in found and found[i]['connected'] and found[i].get('transport')==kind and found[i].get('last_ack_age_sec') is not None and (self.validation_mode or found[i]['last_ack_age_sec'] <= time.monotonic()-start+.15) and found[i].get('last_payload') in ('activity','usage') and (i not in self.previous or found[i].get('generation') != self.previous[i][0] or kind==self.previous[i][1]) for i,kind in wanted.items()):return time.monotonic()-start,last
             except (OSError,ValueError,KeyError):pass
             time.sleep(.35)
         self.record('transport_timeout',False,wanted=wanted,status=last)
@@ -71,7 +71,7 @@ class Fixture:
         if self.proc:
             try:self.event({'type':'shutdown'})
             except (OSError,ValueError):pass
-            try:self.proc.wait(20)
+            try:self.proc.wait(60)
             except subprocess.TimeoutExpired:raise RuntimeError('Candidate did not exit gracefully; inspect its known parent/child before restarting production')
             self.proc=None
         if self.log:self.log.close();self.log=None

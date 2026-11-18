@@ -51,3 +51,17 @@ def test_validation_daemon_requires_disposable_profile(tmp_path,monkeypatch):
     with pytest.raises(ValueError,match='disposable'):
         asyncio.run(daemon.run_daemon(args))
     assert not daemon.parse_args([]).validation_mode
+
+def test_isolated_fixture_transport_wait_does_not_require_live_producer(monkeypatch):
+    import validate_usb_package as fixture
+    f=object.__new__(fixture.Fixture)
+    f.validation_mode=True;f.previous={}
+    row={'device_id':'unit','connected':True,'transport':'usb','last_ack_age_sec':100,
+         'last_payload':'activity','generation':'one'}
+    f.devices=lambda:[row]
+    f.event=lambda _:pytest.fail('Validation wait must not inject live activity')
+    f.record=lambda *a,**k:pytest.fail('Connected isolated device should be ready')
+    clock=iter([0,0,1,2,3,4])
+    monkeypatch.setattr(fixture.time,'monotonic',lambda:next(clock))
+    monkeypatch.setattr(fixture.time,'sleep',lambda _:None)
+    assert f.wait({'unit':'usb'},timeout=2)[1]==[row]
