@@ -3,6 +3,14 @@ CodexMeter Companion changelog
 Entries are grouped by release date, newest first. Application versions are
 recorded separately; firmware changes are noted where applicable.
 
+2026-11-18 — unreleased compatibility candidate (Windows and firmware 3.12.3.4)
+- Detect incompatible Codex chat, quota, database and token formats independently.
+- Add persistent source-health details, one-time tray warnings and local diagnostic copying.
+- Notify once after five minutes of unexplained missing readings, with sleep/closed-Codex suppression.
+- Keep token readings working when quota requests fail and running/waiting counts when unread history fails.
+- Validate chat-owner coverage; distinguish unknown task counts from zero on both displays.
+- Matching firmware is required for reliable unknown/partial task counts on older devices.
+- No automatic installation, restart or diagnostic transmission.
 2026-11-14 — windows-c6-2026.11.14 (Windows 3.12.3.1)
 - Fix release checks after the repository rename to CodexMeter-Companion by
   querying GitHub's stable repository ID instead of the old repository name.

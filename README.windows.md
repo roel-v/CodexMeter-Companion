@@ -353,27 +353,15 @@ and health records. Firmware bundles and evidence are under
 
 ## Desktop and firmware compatibility
 
-Use the desktop executable and **ESP32-C6** factory image from the same dated
-release for the tested combination. The November 12, 2026 bundle uses unchanged
-firmware source from November 1: those releases' clients and firmware can be mixed.
-Existing November 1 displays do not need reflashing for the first November 12 desktop fixes.
-The November 12 follow-up (`windows-c6-2026.11.12.1`) keeps that wire format but
-updates the firmware for token rounding and theme layout fixes; flash its C6 image
-to receive those display improvements.
+Use the Windows executable and the firmware for your specific display from the same release. The C6 and Ball use
+separate images; never bypass the flash tool's chip-family check.
 
-The BLE messages use JSON with `v: 1`, but the firmware currently does **not** check
-that version field or negotiate capabilities. A connection/ACK confirms receipt,
-not full feature compatibility. There is no automatic mismatch warning.
+The 3.12.3.4 candidate validates v1 payloads and advertises the metric_validity capability. With its matching desktop,
+both models distinguish unknown task counts from zero and keep available counts visible when unread history fails.
+Older desktop clients retain their known fields. Older firmware needs updating for reliable partial/unknown counts;
+the desktop's device status explains that limitation. Connection or ACK alone does not establish data compatibility.
 
-- A newer desktop with older firmware can still show fields that firmware knows;
-  optional token breakdown/cost fields are ignored by firmware that predates them.
-- Newer firmware with an older desktop keeps basic quota/token fields working when
-  present. Missing breakdown data is marked unavailable, and missing waiting/done
-  fields do not become valid chat counts.
-- Unrelated upstream versions or future incompatible schemas are not guaranteed:
-  unsupported messages may be rejected, while changed meanings could be misread.
-  Use a matched release when diagnosing missing or incorrect information.
-
-These compatibility statements concern the data protocol. A firmware image must
-also match the board: the C6 image is not for the ESP32-S3. Never bypass esptool's
-chip-family checks.
+Open Codex data status / details in the control panel to inspect source health. Unsupported formats cause one tray
+notification. Unknown-cause outages notify once after five awake minutes, excluding startup/resume grace and known
+closed-Codex periods. Details and copied diagnostics remain local; update checks require the existing configured
+background policy or an explicit manual check. No automatic installation or restart is added.

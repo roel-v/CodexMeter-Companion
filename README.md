@@ -185,3 +185,18 @@ The maintained branch is `main`.
 Thanks to the upstream authors for the application, firmware and themes.
 The [MIT license](LICENSE) and original copyright are retained; see
 [NOTICE.md](NOTICE.md) for third-party attribution.
+
+## When Codex readings stop working
+
+Open **Codex data status / details…** in the control panel, or **Codex data status…** from the tray menu.
+It shows which readings work and why others are unavailable. CodexMeter warns once when it detects an unsupported
+format, or after five minutes of missing readings when the cause is unknown. Closing Codex and computer sleep do
+not count as an unexplained outage. A warning clears after fresh data validates twice.
+
+Use **Check for updates…** to open the update dialog. Nothing is installed automatically. **Copy diagnostics** copies
+a local report without chat text, account IDs, credentials or personal paths. Opening the warning makes no network
+request. A Codex version number alone cannot establish compatibility with undocumented future format changes.
+
+Desktop and firmware 3.12.3.4 add reliable unknown/partial task counts on both display models. Update both firmwares
+with this desktop change: older Ball firmware may show zero for unknown counts, and older firmware may reject a null
+running count. Device status reports the required upgrade. Other working readings continue independently.
