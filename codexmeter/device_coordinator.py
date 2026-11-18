@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import time
+from .transport_types import ConnectionWorker
 
 log = logging.getLogger(__name__)
 BUSY = ('busy_usb', 'busy_ble', 'busy_maintenance')
@@ -18,7 +19,7 @@ class DeviceCoordinator:
         self.clock = clock
         self.wait = wait or asyncio.sleep
         self.task = None
-        self.worker = None
+        self.worker: ConnectionWorker | None = None
         self.kind = None
         self.retry_at = {'usb': 0., 'bluetooth': 0.}
         self.failures = {'usb': 0, 'bluetooth': 0}
@@ -43,8 +44,18 @@ class DeviceCoordinator:
             await asyncio.gather(task, return_exceptions=True)
         self.slot.state.connected = False
         self.slot.state.generation = None
-        self.worker = None
+        self.worker: ConnectionWorker | None = None
         self.kind = None
+
+    async def maintenance_lease(self):
+        """Called under coordinator.lock; no worker cleanup needs that lock."""
+        if self.kind != "usb":
+            return None
+        session = self.worker.session if self.worker else None
+        lease = await session.try_maintenance() if session else None
+        # Ready claims and definitely-unsent stale sessions both relinquish the old handle.
+        await self.fence()
+        return lease
 
     def permitted(self, kind):
         config = self.slot.config
@@ -70,7 +81,7 @@ class DeviceCoordinator:
                 with contextlib.suppress(BaseException):
                     self.task.result()
                 self.task = None
-                self.worker = None
+                self.worker: ConnectionWorker | None = None
                 self.kind = None
                 busy = any(value in error for value in BUSY)
                 self.failures[kind] += 1

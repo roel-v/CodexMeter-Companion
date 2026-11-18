@@ -35,6 +35,10 @@ class DeviceWorker:
         self.identity_observer = identity_observer
         self.single_attempt = False
 
+    @property
+    def session(self):
+        return self.transport.session
+
     async def run(self, stop_event: asyncio.Event) -> None:
         backoff = 1.0
         label = self.slot.config.label

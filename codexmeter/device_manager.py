@@ -300,6 +300,10 @@ class DeviceManager:
         slot.config = updated
 
     async def device_operation(self, event):
+        async with asyncio.timeout(12):
+            return await self._device_operation(event)
+
+    async def _device_operation(self, event):
         import secrets
         from .device_registry import CONNECTION_MODES
         from .host_identity import load_host_id
@@ -343,13 +347,10 @@ class DeviceManager:
                     await coordinator.fence()
                     coordinator.transition('maintenance', 'Local pause; USB required for cross-PC quiescence')
                     return {'ok':True, 'device_id':device_id, 'ready':False, 'local_pause':True}
-                session = getattr(coordinator.worker, 'session', None)
                 try:
-                    if session and coordinator.kind == 'usb':
-                        async with session.exclusive_delivery():
-                            lease = await session.maintenance()
-                            record.update(lease)
-                            await coordinator.fence()
+                    lease = await coordinator.maintenance_lease()
+                    if lease is not None:
+                        record.update(lease)
                     else:
                         # Claim USB maintenance before releasing a live BLE owner.
                         # Firmware can then preserve same-host telemetry atomically.

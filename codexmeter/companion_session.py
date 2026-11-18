@@ -65,6 +65,8 @@ class CompanionSession:
         self._reader = None
         self._heartbeat = None
         self._send_lock = asyncio.Lock()
+        self._lifecycle_lock = asyncio.Lock()
+        self._closing = False
         self._closed = False
         self._claimed = False
         self.state = {}
@@ -156,7 +158,7 @@ class CompanionSession:
 
     async def _exchange(self, key, frame, *, retry=False):
         if self._closed or self.failure:
-            raise TransportError("Session session unavailable") from self.failure
+            raise TransportError("Session unavailable") from self.failure
         future = asyncio.get_running_loop().create_future()
         if key in self._waiters:
             raise TransportError("duplicate Session waiter")
@@ -213,6 +215,26 @@ class CompanionSession:
         """Fence new DATA writes while a caller quiesces and closes this session."""
         async with self._send_lock:
             yield
+
+    @property
+    def lifecycle(self):
+        if self._closed:
+            return "closed"
+        if self._closing or self.failure:
+            return "closing"
+        return "ready" if self._claimed else "connecting"
+
+    async def try_maintenance(self):
+        """None means definitely unsent; exceptions after dispatch retain uncertainty.
+
+        Lock order is DATA then lifecycle. Close never takes the DATA lock.
+        The coordinator must fence only after these locks have been released.
+        """
+        async with self._send_lock:
+            async with self._lifecycle_lock:
+                if self.lifecycle != "ready":
+                    return None
+                return await self.maintenance()
 
     async def maintenance(self):
         reply = await self._control("maint", host=self.host_id, token=self.token)
@@ -288,6 +310,11 @@ class CompanionSession:
             )
 
     async def close(self, *, release=True):
+        self._closing = True
+        async with self._lifecycle_lock:
+            await self._close(release=release)
+
+    async def _close(self, *, release=True):
         if self._closed:
             return
         try:
@@ -299,7 +326,7 @@ class CompanionSession:
         finally:
             self._closed = True
             self._claimed = False
-            self._fail(TransportError("Session session closed"))
+            self._fail(TransportError("Session closed"))
             current = asyncio.current_task()
             tasks = [
                 t

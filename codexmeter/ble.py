@@ -152,6 +152,7 @@ class BleTransport:
         notify_timeout_sec: float = BLE_NOTIFY_TIMEOUT_SEC,
         healthcheck_interval_sec: float = BLE_HEALTHCHECK_INTERVAL_SEC,
     ) -> None:
+        self.session = None
         self.connect_timeout_sec = connect_timeout_sec
         self.disconnect_timeout_sec = disconnect_timeout_sec
         self.write_timeout_sec = write_timeout_sec
@@ -342,6 +343,7 @@ class BleTransport:
         from .delivery_pump import DeliveryPump
         from .delivery import negotiated_replay
         session=BleSession(client,identity,load_host_id())
+        self.session = session
         delivery=DeliveryPump(state, session)
         try:
             await session.open()
@@ -364,7 +366,10 @@ class BleTransport:
             return True
         finally:
             state.connected=False;state.last_disconnected_at=time.monotonic()
-            await session.close()
+            try:
+                await session.close()
+            finally:
+                self.session = None
 
     async def connect_and_write(
         self,

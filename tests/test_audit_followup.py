@@ -131,3 +131,62 @@ def test_legacy_consumers_do_not_refresh_expired_usage(trigger):
         await task
         assert writes==[]
     asyncio.run(run())
+
+
+def test_maintenance_uses_fresh_endpoint_after_closed_session(monkeypatch):
+    from types import SimpleNamespace
+    from tests.test_device_coordinator import manager as make_manager
+    from tests.test_usb_transport import ID
+    from codexmeter.device_registry import DeviceConfig
+    async def run():
+        s=UsbSession(discovered(),H,channel_factory=FakeChannel)
+        await s.open();await s.close(release=False)
+        m=make_manager([DeviceConfig(ID)]);m._coordinators_init();c=m.coordinators[0]
+        c.worker=SimpleNamespace(session=s);c.kind='usb'
+        m.usb_discovery.devices['COMTEST']=discovered()
+        async def inspect(port): return {'device_id':ID},False
+        class Maintenance:
+            identity=SimpleNamespace(boot=B)
+            token='c'*32
+            async def close(self,**kw): pass
+        async def connect(*args):
+            assert c.worker is None, 'old owner must be fenced before reopening USB'
+            return Maintenance()
+        monkeypatch.setattr('codexmeter.usb_transport.inspect_maintenance_identity',inspect)
+        monkeypatch.setattr('codexmeter.usb_transport.maintenance_connection',connect)
+        result=await m.device_operation({'type':'maintenance_acquire','device_id':ID,'tool':True})
+        assert result['ready']
+    asyncio.run(run())
+
+
+def test_maintenance_waits_for_native_cleanup_before_unsent_result():
+    async def run():
+        entered=asyncio.Event();finish=asyncio.Event()
+        class Channel(FakeChannel):
+            async def close(self):
+                entered.set();await finish.wait();await super().close()
+        s=UsbSession(discovered(),H,channel_factory=Channel)
+        await s.open()
+        closing=asyncio.create_task(s.close(release=False));await entered.wait()
+        attempt=asyncio.create_task(s.try_maintenance());await asyncio.sleep(0)
+        assert not attempt.done()
+        finish.set();await closing
+        assert await attempt is None
+        assert not any(b'"op":"maint"' in f for f in s.channel.writes)
+    asyncio.run(run())
+
+
+def test_maintenance_unknown_outcome_is_not_treated_as_unsent():
+    from codexmeter.transport_types import UnknownDelivery
+    async def run():
+        class Channel(FakeChannel):
+            async def write(self,frame):
+                if b'"op":"maint"' in frame:
+                    self.writes.append(frame);raise UnknownDelivery('injected uncertain write')
+                await super().write(frame)
+        s=UsbSession(discovered(),H,channel_factory=Channel)
+        await s.open()
+        try:
+            with pytest.raises(UnknownDelivery): await s.try_maintenance()
+        finally: await s.close(release=False)
+    asyncio.run(run())
