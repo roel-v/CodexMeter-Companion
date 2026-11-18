@@ -3,7 +3,8 @@ import json
 import time
 from dataclasses import replace
 import pytest
-from codexmeter.ble import BleIdentity, BleIdentityError, BleState, BleTransport
+from codexmeter.device_identity import DeviceIdentity, DeviceIdentityError
+from codexmeter.ble import BleState, BleTransport
 from codexmeter.device_metadata import DeviceMetadata
 from codexmeter.device_registry import DeviceConfig, DeviceRegistry
 from codexmeter.multi_ble import DeviceManager, DeviceSlot, DeviceWorker, DiscoveryService
@@ -32,18 +33,18 @@ def test_registry_does_not_merge_duplicate_advertised_names(tmp_path):
 
 def test_metadata_identity_and_legacy():
     base={'device_id':config().device_id,'short_id':'AABBCC','name':'CodexMeter-AABBCC'}
-    assert BleIdentity.from_bytes(json.dumps(base).encode()).metadata.compatibility=='legacy'
-    parsed=BleIdentity.from_bytes(json.dumps(dict(base,**config().metadata.to_json())).encode())
+    assert DeviceIdentity.from_bytes(json.dumps(base).encode()).metadata.compatibility=='legacy'
+    parsed=DeviceIdentity.from_bytes(json.dumps(dict(base,**config().metadata.to_json())).encode())
     assert parsed.metadata.model=='spotpear_ball_v2'
-    with pytest.raises(BleIdentityError): BleIdentity.from_bytes(b' '*513)
-    with pytest.raises(BleIdentityError): BleIdentity.from_bytes(json.dumps(dict(base,protocol=True)).encode())
+    with pytest.raises(DeviceIdentityError): DeviceIdentity.from_bytes(b' '*513)
+    with pytest.raises(DeviceIdentityError): DeviceIdentity.from_bytes(json.dumps(dict(base,protocol=True)).encode())
 
 
 def test_incompatible_worker_is_independent():
     first,second=DeviceSlot(config(1)),DeviceSlot(config(2))
     worker=DeviceWorker(first,DiscoveryService(),BleTransport())
-    identity=BleIdentity(first.config.device_id,'AABBCC','CodexMeter-AABBCC',DeviceMetadata(protocol=2))
-    with pytest.raises(BleIdentityError): worker._validate_identity(identity)
+    identity=DeviceIdentity(first.config.device_id,'AABBCC','CodexMeter-AABBCC',DeviceMetadata(protocol=2))
+    with pytest.raises(DeviceIdentityError): worker._validate_identity(identity)
     assert first.status(now=0)['compatibility']=='incompatible'
     assert second.config.metadata.compatible
 

@@ -1,17 +1,7 @@
 import asyncio
 
-from codexmeter.ble import (
-    BleAckError,
-    BleAckTimeout,
-    BleAckTracker,
-    BleConnectTimeout,
-    BleIdentity,
-    BleIdentityError,
-    BleNotifyError,
-    BleState,
-    BleTransport,
-    BleWriteTimeout,
-)
+from codexmeter.device_identity import DeviceIdentity, DeviceIdentityError
+from codexmeter.ble import BleAckError, BleAckTimeout, BleAckTracker, BleConnectTimeout, BleNotifyError, BleState, BleTransport, BleWriteTimeout
 from codexmeter.payloads import (
     build_activity_payload,
     build_alert_payload,
@@ -292,7 +282,7 @@ def test_ble_state_status_reports_health_ages():
 
 
 def test_ble_identity_parses_required_fields():
-    identity = BleIdentity.from_bytes(
+    identity = DeviceIdentity.from_bytes(
         b'{"device_id":"codexmeter-f46690858428","short_id":"F46690",'
         b'"name":"CodexMeter-F46690"}'
     )
@@ -303,19 +293,19 @@ def test_ble_identity_parses_required_fields():
 
 def test_ble_identity_rejects_incomplete_json():
     try:
-        BleIdentity.from_bytes(b'{"short_id":"F46690"}')
-    except BleIdentityError:
+        DeviceIdentity.from_bytes(b'{"short_id":"F46690"}')
+    except DeviceIdentityError:
         return
     raise AssertionError("expected incomplete BLE identity to be rejected")
 
 
 def test_ble_identity_rejects_device_id_short_id_mismatch():
     try:
-        BleIdentity.from_bytes(
+        DeviceIdentity.from_bytes(
             b'{"device_id":"codexmeter-a3f91c858428","short_id":"F46690",'
             b'"name":"CodexMeter-F46690"}'
         )
-    except BleIdentityError:
+    except DeviceIdentityError:
         return
     raise AssertionError("expected inconsistent BLE identity to be rejected")
 

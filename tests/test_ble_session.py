@@ -3,7 +3,7 @@ import json
 import struct
 import pytest
 from codexmeter.ble_session import FragmentDecoder, BleSession
-from codexmeter.ble import BleIdentity
+from codexmeter.device_identity import DeviceIdentity
 from codexmeter.payloads import Payload
 from codexmeter.device_metadata import DeviceMetadata
 from codexmeter.settings import TX_CHAR_UUID
@@ -86,7 +86,7 @@ class Peer:
 def test_ble_minimum_mtu_full_payload_requires_matching_ack():
     async def run():
         peer = Peer()
-        identity = BleIdentity(
+        identity = DeviceIdentity(
             RAW["device_id"], RAW["short_id"], RAW["name"], DeviceMetadata(), RAW
         )
         session = BleSession(peer, identity, H)
@@ -129,7 +129,7 @@ def test_ble_queued_writes_alone_are_not_delivery():
         peer = Peer()
         s = BleSession(
             peer,
-            BleIdentity(RAW["device_id"], RAW["short_id"], RAW["name"], raw=RAW),
+            DeviceIdentity(RAW["device_id"], RAW["short_id"], RAW["name"], raw=RAW),
             H,
         )
         await s.open()
@@ -145,7 +145,7 @@ def test_ble_queued_writes_alone_are_not_delivery():
 def test_tokenless_owner_notice_is_connection_scoped_and_old_callback_fenced():
     async def run():
         peer = Peer()
-        identity = BleIdentity(RAW["device_id"], RAW["short_id"], RAW["name"], raw=RAW)
+        identity = DeviceIdentity(RAW["device_id"], RAW["short_id"], RAW["name"], raw=RAW)
         first = BleSession(peer, identity, H)
         await first.open()
         old_callback = peer.callback

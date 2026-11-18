@@ -110,12 +110,12 @@ class UsbDeviceWorker:
                 self.session = self.session_factory(discovered, self.host_id)
                 await self.session.open()
                 if self.identity_observer:
-                    from .ble import BleIdentity
+                    from .device_identity import DeviceIdentity
 
                     identity = discovered.identity
                     self.slot.config = self.identity_observer(
                         self.slot.config,
-                        BleIdentity(
+                        DeviceIdentity(
                             identity.device_id,
                             identity.short_id or "",
                             identity.name or "",

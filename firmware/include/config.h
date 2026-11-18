@@ -4,13 +4,7 @@
 
 #define CODEXMETER_DEVICE_NAME "CodexMeter"
 
-#ifdef CODEXMETER_BOARD_BALL
-#define CODEXMETER_SCREEN_W 240
-#define CODEXMETER_SCREEN_H 240
-#else
-#define CODEXMETER_SCREEN_W 480
-#define CODEXMETER_SCREEN_H 480
-#endif
+#include "board_profile.h"
 
 // Waveshare ESP32-S3-Touch-AMOLED-2.16 QSPI AMOLED defaults. Keep all board
 // pins here so hardware revisions can be adjusted without touching UI logic.

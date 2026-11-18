@@ -100,7 +100,7 @@ class UsbIdentity:
             raise ProtocolError("USB firmware upgrade required (wire/app v1)")
         if not isinstance(data.get("boot"), str) or not BOOT.fullmatch(data["boot"]):
             raise ProtocolError("invalid boot identity")
-        if data.get("model") not in ("waveshare_c6_amoled_216", "spotpear_ball_v2"):
+        if data.get("model") not in ("waveshare_c6_amoled_216", "spotpear_ball_v2", "waveshare_amoled_216"):
             raise ProtocolError("unsupported USB model")
         fw = data.get("fw")
         if (
@@ -122,9 +122,10 @@ class UsbIdentity:
                 not isinstance(data[key], str) or not data[key] or len(data[key]) > 64
             ):
                 raise ProtocolError("invalid identity label")
-        metadata = DeviceMetadata.from_json(
-            {**data, "firmware": fw, "protocol": data["app"]}
-        )
+        try:
+            metadata = DeviceMetadata.from_json(data)
+        except ValueError as exc:
+            raise ProtocolError(str(exc)) from exc
         return cls(
             data["device_id"],
             data.get("short_id"),

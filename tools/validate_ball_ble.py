@@ -3,7 +3,7 @@ import asyncio
 import json
 from pathlib import Path
 from bleak import BleakScanner, BleakClient
-from codexmeter.ble import BleIdentity
+from codexmeter.device_identity import DeviceIdentity
 from codexmeter.settings import IDENTITY_CHAR_UUID, RX_CHAR_UUID, TX_CHAR_UUID
 from codexmeter.payloads import Payload
 
@@ -14,7 +14,7 @@ async def main():
     for attempt in range(2):
         async with BleakClient(device,timeout=15) as client:
             raw=await client.read_gatt_char(IDENTITY_CHAR_UUID)
-            identity=BleIdentity.from_bytes(raw)
+            identity=DeviceIdentity.from_bytes(raw)
             assert identity.device_id=='codexmeter-6867f4697090'
             assert identity.metadata.model=='spotpear_ball_v2'
             assert identity.metadata.width==240 and identity.metadata.height==240

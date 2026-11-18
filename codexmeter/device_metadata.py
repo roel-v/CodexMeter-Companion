@@ -48,6 +48,13 @@ class DeviceMetadata:
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> "DeviceMetadata":
         # Malformed declared metadata is not silently downgraded to legacy.
+        data = dict(data)
+        for canonical, alias in (("firmware", "fw"), ("protocol", "app")):
+            if alias in data:
+                if canonical in data and (type(data[canonical]) is not type(data[alias])
+                                          or data[canonical] != data[alias]):
+                    raise ValueError(f"conflicting device {canonical}/{alias}")
+                data[canonical] = data[alias]
         values: dict[str, Any] = {}
         for key in ("model", "firmware"):
             if key not in data:

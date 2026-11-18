@@ -35,22 +35,14 @@ void identity_init() {
   snprintf(short_id, sizeof(short_id), "%06lX", (unsigned long)short_value);
   snprintf(ble_name, sizeof(ble_name), "%s-%s", CODEXMETER_DEVICE_NAME, short_id);
   snprintf(boot,sizeof(boot),"%08lx%08lx",(unsigned long)esp_random(),(unsigned long)esp_random());
-#ifdef CODEXMETER_BOARD_BALL
-  int length = snprintf(json,sizeof(json),
+  int length = snprintf(json, sizeof(json),
       "{\"device_id\":\"%s\",\"short_id\":\"%s\",\"name\":\"%s\","
-      "\"model\":\"spotpear_ball_v2\",\"firmware\":\"%s\",\"protocol\":1,"
+      "\"model\":\"%s\",\"firmware\":\"%s\",\"protocol\":1,"
       "\"usb\":1,\"app\":1,\"ble_owner\":1,\"fw\":\"%s\",\"boot\":\"%s\","
-      "\"width\":240,\"height\":240,\"capabilities\":[\"metric_validity\",\"brightness\",\"rotation\",\"touch\",\"screen\"]}",
-      device_id,short_id,ble_name,firmware_version,firmware_version,boot);
-  if(length<0 || length>=sizeof(json)) abort();
-#else
-  snprintf(json, sizeof(json),
-           "{\"device_id\":\"%s\",\"short_id\":\"%s\",\"name\":\"%s\","
-           "\"model\":\"waveshare_c6_amoled_216\",\"usb\":1,\"app\":1,\"ble_owner\":1,"
-           "\"fw\":\"%s\",\"boot\":\"%s\","
-           "\"capabilities\":[\"metric_validity\",\"brightness\",\"rotation\",\"screen\"]}",
-           device_id, short_id, ble_name, firmware_version, boot);
-#endif
+      "\"width\":%d,\"height\":%d,\"capabilities\":[" CODEXMETER_CAPABILITIES "]}",
+      device_id, short_id, ble_name, CODEXMETER_MODEL, firmware_version,
+      firmware_version, boot, CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H);
+  if (length < 0 || static_cast<size_t>(length) >= sizeof(json)) abort();
   initialized = true;
 }
 

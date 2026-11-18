@@ -5,14 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 import sys
 import time
-from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .payloads import Payload
-from .device_metadata import DeviceMetadata, MAX_IDENTITY_BYTES
 from .settings import (
     BLE_ACK_TIMEOUT_SEC,
     BLE_CONNECT_TIMEOUT_SEC,
@@ -119,50 +116,7 @@ class BleNotifyError(RuntimeError):
     """Raised when mandatory BLE notifications cannot be subscribed."""
 
 
-class BleIdentityError(RuntimeError):
-    """Raised when a connected peripheral has an invalid or unexpected identity."""
-
-
-@dataclass(frozen=True)
-class BleIdentity:
-    device_id: str
-    short_id: str
-    name: str
-    metadata: DeviceMetadata = DeviceMetadata()
-    raw: dict | None = field(default=None, compare=False)
-
-    @classmethod
-    def from_bytes(cls, raw: bytes | bytearray) -> "BleIdentity":
-        if len(raw) > MAX_IDENTITY_BYTES:
-            raise BleIdentityError("BLE identity exceeds 512 bytes")
-        try:
-            data = json.loads(bytes(raw).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise BleIdentityError("BLE identity is not valid JSON") from exc
-        if not isinstance(data, dict):
-            raise BleIdentityError("BLE identity must be a JSON object")
-        device_id = data.get("device_id")
-        short_id = data.get("short_id")
-        name = data.get("name")
-        if not all(isinstance(value, str) and value for value in (device_id, short_id, name)):
-            raise BleIdentityError("BLE identity is missing required fields")
-        normalized_device_id = str(device_id).lower()
-        normalized_short_id = str(short_id).upper()
-        normalized_name = str(name)
-        if not re.fullmatch(r"codexmeter-[0-9a-f]{12}", normalized_device_id):
-            raise BleIdentityError("BLE identity device id has an invalid format")
-        if not re.fullmatch(r"[0-9A-F]{6}", normalized_short_id):
-            raise BleIdentityError("BLE identity short id has an invalid format")
-        device_short_id = normalized_device_id.removeprefix("codexmeter-")[:6].upper()
-        if device_short_id != normalized_short_id:
-            raise BleIdentityError("BLE identity device id does not match its short id")
-        if normalized_name != f"{DEVICE_NAME}-{normalized_short_id}":
-            raise BleIdentityError("BLE identity name does not match its short id")
-        try:
-            metadata = DeviceMetadata.from_json(data)
-        except ValueError as exc:
-            raise BleIdentityError(str(exc)) from exc
-        return cls(normalized_device_id, normalized_short_id, normalized_name, metadata, data)
+from .device_identity import DeviceIdentity, DeviceIdentityError
 
 
 class BleAckTracker:
@@ -326,7 +280,7 @@ class BleTransport:
         stop_event: asyncio.Event,
         *,
         require_identity: bool = False,
-        identity_validator: Callable[[BleIdentity], None] | None = None,
+        identity_validator: Callable[[DeviceIdentity], None] | None = None,
     ) -> bool:
         from bleak.exc import BleakError
 
@@ -510,7 +464,7 @@ class BleTransport:
         stop_event: asyncio.Event,
         *,
         require_identity: bool = False,
-        identity_validator: Callable[[BleIdentity], None] | None = None,
+        identity_validator: Callable[[DeviceIdentity], None] | None = None,
     ) -> bool:
         return await self._connect_and_write(
             target,
@@ -521,17 +475,17 @@ class BleTransport:
             identity_validator=identity_validator,
         )
 
-    async def _read_identity(self, client: Any) -> BleIdentity:
+    async def _read_identity(self, client: Any) -> DeviceIdentity:
         try:
             raw = await asyncio.wait_for(
                 client.read_gatt_char(IDENTITY_CHAR_UUID),
                 timeout=self.notify_timeout_sec,
             )
         except asyncio.TimeoutError as exc:
-            raise BleIdentityError("BLE identity read timed out") from exc
+            raise DeviceIdentityError("BLE identity read timed out") from exc
         except Exception as exc:
-            raise BleIdentityError("BLE identity characteristic unavailable") from exc
-        return BleIdentity.from_bytes(raw)
+            raise DeviceIdentityError("BLE identity characteristic unavailable") from exc
+        return DeviceIdentity.from_bytes(raw)
 
     async def _write_payload(
         self,

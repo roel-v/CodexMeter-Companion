@@ -49,3 +49,23 @@ def test_unknown_protocol_is_not_legacy():
 def test_malformed_metadata_fails_closed(fields):
     with pytest.raises(ValueError):
         DeviceMetadata.from_json(fields)
+
+
+@pytest.mark.parametrize("model", ["waveshare_c6_amoled_216", "spotpear_ball_v2", "waveshare_amoled_216"])
+def test_same_identity_metadata_over_both_transports(model):
+    from codexmeter.device_identity import DeviceIdentity
+    from codexmeter.usb_protocol import UsbIdentity
+    fields = dict(device_id="codexmeter-001122334455", short_id="001122",
+                  name="CodexMeter-001122", model=model, fw="3.12.3.4", app=1,
+                  usb=1, boot="0011223344556677",
+                  capabilities=["brightness", "screen", "rotation"])
+    raw = json.dumps(fields).encode()
+    assert DeviceIdentity.from_bytes(raw).metadata == UsbIdentity.parse(b"IDENTITY " + raw).metadata
+    assert DeviceIdentity.from_bytes(raw).metadata.compatibility == "compatible"
+
+
+@pytest.mark.parametrize("fields", [dict(fw="one", firmware="two"),
+                                      dict(app=1, protocol=2), dict(app=True, protocol=1)])
+def test_conflicting_identity_aliases_are_rejected(fields):
+    with pytest.raises(ValueError):
+        DeviceMetadata.from_json(fields)

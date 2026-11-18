@@ -9,18 +9,8 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any, Awaitable, Callable
 
-from .ble import (
-    BleAckError,
-    BleAckTimeout,
-    BleConnectTimeout,
-    BleIdentity,
-    BleIdentityError,
-    BleNotifyError,
-    BleState,
-    BleTransport,
-    BleWriteTimeout,
-    MacConnectedDeviceLookup,
-)
+from .device_identity import DeviceIdentity, DeviceIdentityError
+from .ble import BleAckError, BleAckTimeout, BleConnectTimeout, BleNotifyError, BleState, BleTransport, BleWriteTimeout, MacConnectedDeviceLookup
 from .device_registry import (
     DeviceConfig,
     default_legacy_device,
@@ -35,7 +25,7 @@ from .settings import DEVICE_NAME, SERVICE_UUID
 from .supervision import supervise
 
 log = logging.getLogger(__name__)
-IdentityObserver = Callable[[DeviceConfig, BleIdentity], DeviceConfig]
+IdentityObserver = Callable[[DeviceConfig, DeviceIdentity], DeviceConfig]
 
 
 @dataclass
@@ -286,7 +276,7 @@ class DeviceWorker:
                 BleAckTimeout,
                 BleAckError,
                 BleNotifyError,
-                BleIdentityError,
+                DeviceIdentityError,
             ) as exc:
                 self._record_failure(str(exc))
                 if self.single_attempt:
@@ -310,21 +300,21 @@ class DeviceWorker:
         state.last_error = error
         log.warning("CodexMeter %s: %s", self.slot.config.label, error)
 
-    def _validate_identity(self, identity: BleIdentity) -> None:
+    def _validate_identity(self, identity: DeviceIdentity) -> None:
         config = self.slot.config
         if config.short_id and normalize_short_id(identity.short_id) != config.short_id:
-            raise BleIdentityError(
+            raise DeviceIdentityError(
                 f"BLE identity short id {identity.short_id} does not match {config.short_id}"
             )
         if is_full_device_id(config.device_id) and normalize_device_id(
             identity.device_id
         ) != normalize_device_id(config.device_id):
-            raise BleIdentityError(
+            raise DeviceIdentityError(
                 f"BLE identity {identity.device_id} does not match {config.device_id}"
             )
         expected_name = config.name
         if expected_name and identity.name != expected_name:
-            raise BleIdentityError(
+            raise DeviceIdentityError(
                 f"BLE identity name {identity.name} does not match {expected_name}"
             )
         if self.identity_observer is not None:
@@ -332,7 +322,7 @@ class DeviceWorker:
         else:
             self.slot.config = replace(config, metadata=identity.metadata)
         if not identity.metadata.compatible:
-            raise BleIdentityError(f"Unsupported display protocol {identity.metadata.protocol}; update the companion")
+            raise DeviceIdentityError(f"Unsupported display protocol {identity.metadata.protocol}; update the companion")
 
 
 class DeviceManager:

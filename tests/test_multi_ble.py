@@ -2,7 +2,8 @@ import asyncio
 import time
 from types import SimpleNamespace
 
-from codexmeter.ble import BleIdentity, BleIdentityError, BleTransport
+from codexmeter.device_identity import DeviceIdentity, DeviceIdentityError
+from codexmeter.ble import BleTransport
 from codexmeter.device_registry import DeviceConfig, config_from_short_id
 from codexmeter.multi_ble import (
     DeviceManager,
@@ -79,13 +80,13 @@ def test_device_worker_rejects_identity_with_wrong_short_id():
 
     try:
         worker._validate_identity(
-            BleIdentity(
+            DeviceIdentity(
                 "codexmeter-9b20d4858428",
                 "9B20D4",
                 "CodexMeter-9B20D4",
             )
         )
-    except BleIdentityError:
+    except DeviceIdentityError:
         return
     raise AssertionError("expected mismatched device identity")
 
@@ -106,7 +107,7 @@ def test_device_worker_binds_short_config_to_full_identity():
         slot, DiscoveryService(), BleTransport(), identity_observer=bind
     )
     worker._validate_identity(
-        BleIdentity(
+        DeviceIdentity(
             "codexmeter-a3f91c858428",
             "A3F91C",
             "CodexMeter-A3F91C",

@@ -16,7 +16,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import TextIO
 
-from .ble import BleIdentity
+from .device_identity import DeviceIdentity
 from .device_registry import DeviceConfig, DeviceRegistry
 from .events import EventServer
 from .limits import (
@@ -310,7 +310,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
     )
     registry = DeviceRegistry.load()
 
-    def bind_identity(config: DeviceConfig, identity: BleIdentity) -> DeviceConfig:
+    def bind_identity(config: DeviceConfig, identity: DeviceIdentity) -> DeviceConfig:
         if (config.device_id == identity.device_id and config.name == identity.name
                 and config.metadata == identity.metadata):
             return config

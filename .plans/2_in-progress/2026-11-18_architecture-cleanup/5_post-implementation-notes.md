@@ -17,3 +17,13 @@ Native fixtures cover valid totals without breakdown, unknown pricing and sum ov
 Layout-specific currency formatting remains separate.
 
 Validation: native firmware protocol/view-model harness passed. Existing host time_t-to-long warnings remain in model.cpp.
+
+## Phase 2 — Neutral identity and board metadata
+
+DeviceIdentity now lives outside BLE; all production, test and validation-tool imports migrated.
+Metadata normalizes fw/app aliases for both transports and rejects conflicting canonical fields.
+Firmware uses a shared board descriptor for model, geometry and capabilities. C6 now advertises
+its firmware/application versions and dimensions; original S3 no longer claims to be a C6.
+USB recognizes the retained S3 target. Identity output is bounded on every board.
+Validation: 82 focused identity/BLE/USB/multi-display tests passed. Full board compilation remains
+part of the final firmware build gate; no firmware has been installed during these edits.

@@ -12,7 +12,7 @@ from pathlib import Path
 from bleak import BleakClient, BleakScanner
 from capture_screenshot import capture_rgb565le, rgb565le_to_png
 from serial_device import SerialSession
-from codexmeter.ble import BleIdentity
+from codexmeter.device_identity import DeviceIdentity
 from codexmeter.payloads import Payload
 from codexmeter.settings import IDENTITY_CHAR_UUID, RX_CHAR_UUID, TX_CHAR_UUID
 
@@ -44,7 +44,7 @@ async def main(args):
     device=await BleakScanner.find_device_by_filter(lambda d,a:a.local_name=="CodexMeter-6867F4",timeout=15)
     if device is None: raise RuntimeError("Ball not found")
     async with BleakClient(device,timeout=15) as client:
-        identity=BleIdentity.from_bytes(await client.read_gatt_char(IDENTITY_CHAR_UUID))
+        identity=DeviceIdentity.from_bytes(await client.read_gatt_char(IDENTITY_CHAR_UUID))
         assert identity.device_id=="codexmeter-6867f4697090"
         assert identity.metadata.model=="spotpear_ball_v2"
         acks=asyncio.Queue()
