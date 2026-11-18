@@ -27,6 +27,8 @@ def self_test(output: Path) -> int:
         root.withdraw()
         app = MeterApp(root)
         root.update()
+        from .panel_diagnostics import check_panel
+        result["external_panel"] = check_panel(root, app)
         from .pricing import PricingStore
         assert PricingStore().revisions()[-1]["prices"], "Bundled pricing seed missing"
         app.open_pricing()

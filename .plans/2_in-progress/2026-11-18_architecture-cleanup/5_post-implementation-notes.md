@@ -110,3 +110,10 @@ and onefile builds are running as phase-8 verification.
 Removed the remaining single-display screen-policy argument (production always passed None), leaving
 only the shared policy and manager callback. The transport contract now types its negotiated identity.
 Validation: 36 policy/coordinator/daemon tests passed, including the actual periodic observation loop.
+
+## Phase 8 — Acceptance coverage
+
+Added a bounded real-Tk standalone-panel check to the package self-test. It runs the actual asynchronous
+polling worker against synthetic valid/offline/recovered ping replies and opens the details dialog.
+The existing native tray check covers clicks, dialogs, recovery and clean exit. Source self-test passed
+in an isolated D: profile; the final package must pass this expanded check too.
