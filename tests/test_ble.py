@@ -329,3 +329,36 @@ def test_ble_remembers_latest_desired_state_before_ack():
     remember_desired(payload, state)
 
     assert state.last_activity == payload
+
+
+def test_cancellation_during_disconnect_waits_for_native_cleanup():
+    async def run():
+        started = asyncio.Event()
+        finish = asyncio.Event()
+
+        class Client:
+            is_connected = True
+
+            async def disconnect(self):
+                started.set()
+                await finish.wait()
+                self.is_connected = False
+
+        client = Client()
+        transport = BleTransport(disconnect_timeout_sec=.5)
+        task = asyncio.create_task(transport._disconnect(client, "test-device"))
+        await started.wait()
+        task.cancel()
+        await asyncio.sleep(0)
+        assert not task.done()
+        assert client.is_connected
+        finish.set()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("worker cancellation must still propagate")
+        assert not client.is_connected
+
+    asyncio.run(run())

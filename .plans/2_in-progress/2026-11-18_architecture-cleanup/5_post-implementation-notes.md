@@ -144,3 +144,12 @@ maintenance first, then fences BLE; legacy devices and failed claims still fence
 coordinator/maintenance tests passed, including an ordering regression with discovery already paused.
 The executable is rebuilt and the affected physical captures must be repeated; earlier transfer-only
 success records are not treated as visual acceptance.
+
+### Cancellation during native BLE disconnect
+
+The rebuilt package reproduced an immediate GATT identity failure after maintenance twice. Ownership revocation
+can start normal worker cleanup before coordinator.fence cancels that worker; its native disconnect was then
+cancellable. Shield the bounded disconnect and await it before propagating cancellation, so the coordinator cannot
+reuse the endpoint while cleanup is unfinished. Regression validation: 42 BLE/coordinator tests passed, including
+cancellation injected after native disconnect starts. Both failed hardware runs restored settings and production;
+the corrected package must pass the affected matrix before acceptance.

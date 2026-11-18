@@ -165,6 +165,16 @@ class BleTransport:
         return BleakClient(target, timeout=self.connect_timeout_sec)
 
     async def _disconnect(self, client: Any, display: str) -> None:
+        # Ownership revocation can start cleanup before the coordinator cancels
+        # the worker. Do not let that cancellation strand the native GATT handle.
+        cleanup = asyncio.create_task(self._disconnect_bounded(client, display))
+        try:
+            await asyncio.shield(cleanup)
+        except asyncio.CancelledError:
+            await cleanup
+            raise
+
+    async def _disconnect_bounded(self, client: Any, display: str) -> None:
         try:
             await asyncio.wait_for(
                 client.disconnect(), timeout=self.disconnect_timeout_sec
