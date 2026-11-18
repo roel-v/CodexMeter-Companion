@@ -3,7 +3,8 @@ CodexMeter Companion changelog
 Entries are grouped by release date, newest first. Application versions are
 recorded separately; firmware changes are noted where applicable.
 
-2026-11-18 — unreleased compatibility and architecture cleanup (Windows and firmware 3.12.3.4)
+2026-11-19 — windows-c6-2026.11.19 (Windows and firmware 3.12.3.5)
+- Use USB data on either supported display, including on PCs without Bluetooth. Auto mode prefers USB and falls back to Bluetooth LE when available.
 - Coordinate pricing acceptance with concurrent checks; preserve newer pending changes and rate history.
 - Date desktop token reports and explicitly mark stale, legacy or unavailable breakdown/cost estimates.
 - Keep failed registry saves out of recovery backups and share mutation rollback handling.
