@@ -7,6 +7,7 @@
 #include "config.h"
 #include "c6_assets.h"
 #include "theme_fonts.h"
+#include "theme_label_helpers.h"
 #include "device_log.h"
 
 namespace {
@@ -132,11 +133,6 @@ void strip_obj(lv_obj_t* obj) {
   lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
 }
 
-const lv_font_t* font_or(
-    const lv_font_t* preferred, const lv_font_t* fallback) {
-  return preferred ? preferred : fallback;
-}
-
 lv_obj_t* make_label(
     lv_obj_t* parent, const char* text, const lv_font_t* font,
     lv_color_t color, int x, int y) {
@@ -164,14 +160,6 @@ void set_scale(
     lv_obj_t* label, int scale_x, int scale_y = 256) {
   lv_obj_set_style_transform_scale_x(label, scale_x, 0);
   lv_obj_set_style_transform_scale_y(label, scale_y, 0);
-}
-
-bool set_label_text_if_changed(
-    lv_obj_t* label, const char* text) {
-  const char* current = lv_label_get_text(label);
-  if (current && strcmp(current, text) == 0) return false;
-  lv_label_set_text(label, text);
-  return true;
 }
 
 bool set_unit_visibility(lv_obj_t* unit, const char* text) {

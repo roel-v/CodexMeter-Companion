@@ -9,6 +9,7 @@
 #include "config.h"
 #include "c6_assets.h"
 #include "theme_fonts.h"
+#include "theme_label_helpers.h"
 #include "device_log.h"
 
 namespace {
@@ -154,19 +155,6 @@ lv_obj_t* make_content_label(
       LV_SIZE_CONTENT, LV_TEXT_ALIGN_LEFT);
   lv_obj_set_style_transform_pivot_x(label, 0, 0);
   return label;
-}
-
-const lv_font_t* font_or(
-    const lv_font_t* preferred, const lv_font_t* fallback) {
-  return preferred ? preferred : fallback;
-}
-
-bool set_label_text_if_changed(
-    lv_obj_t* label, const char* text) {
-  const char* current = lv_label_get_text(label);
-  if (current && strcmp(current, text) == 0) return false;
-  lv_label_set_text(label, text);
-  return true;
 }
 
 bool read_file_exact(

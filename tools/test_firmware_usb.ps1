@@ -38,3 +38,13 @@ foreach($variant in @('production','reduced')) {
     if($LASTEXITCODE){throw 'Parser boundary tests failed'}
   } finally {Pop-Location}
 }
+
+# Exercise the production theme helpers against a minimal LVGL boundary.
+Push-Location $out
+try {
+  $compile='call "'+$VcVars+'" >nul && cl /nologo /std:c++17 /EHsc /W4 /I"'+$repo+'\tests\theme_native" /I"'+$source+'" "'+$repo+'\tests\theme_helpers.cpp" /Fe:theme_helpers.exe'
+  & cmd.exe /d /s /c $compile
+  if($LASTEXITCODE){throw 'Theme-helper compile failed'}
+  & .\theme_helpers.exe
+  if($LASTEXITCODE){throw 'Theme-helper tests failed'}
+} finally {Pop-Location}

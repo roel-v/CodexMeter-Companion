@@ -7,6 +7,7 @@
 #include "config.h"
 #include "c6_assets.h"
 #include "theme_fonts.h"
+#include "theme_label_helpers.h"
 #include "device_log.h"
 
 namespace {
@@ -94,11 +95,6 @@ void strip_obj(lv_obj_t* obj) {
   lv_obj_remove_style_all(obj);
   lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
-}
-
-const lv_font_t* font_or(
-    const lv_font_t* preferred, const lv_font_t* fallback) {
-  return preferred ? preferred : fallback;
 }
 
 lv_obj_t* make_label(
@@ -207,13 +203,6 @@ void set_task_icon_x(ThreeBodyThemeState* state, int x) {
   lv_obj_set_x(state->task_icon_tab, x + 4);
   lv_obj_set_x(state->task_icon_line_top, x + 4);
   lv_obj_set_x(state->task_icon_line_bottom, x + 4);
-}
-
-bool set_label_text_if_changed(lv_obj_t* label, const char* text) {
-  const char* current = lv_label_get_text(label);
-  if (current && strcmp(current, text) == 0) return false;
-  lv_label_set_text(label, text);
-  return true;
 }
 
 void set_scale(lv_obj_t* label, int scale_x, int scale_y) {

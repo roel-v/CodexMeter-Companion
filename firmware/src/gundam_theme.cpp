@@ -7,6 +7,7 @@
 #include "config.h"
 #include "c6_assets.h"
 #include "theme_fonts.h"
+#include "theme_label_helpers.h"
 #include "device_log.h"
 
 namespace {
@@ -153,19 +154,6 @@ void set_instrument_outline(lv_obj_t* label) {
   lv_obj_set_style_text_outline_stroke_width(label, 1, 0);
   lv_obj_set_style_text_outline_stroke_opa(
       label, LV_OPA_50, 0);
-}
-
-bool set_label_text_if_changed(
-    lv_obj_t* label, const char* text) {
-  const char* current = lv_label_get_text(label);
-  if (current && strcmp(current, text) == 0) return false;
-  lv_label_set_text(label, text);
-  return true;
-}
-
-const lv_font_t* font_or(
-    const lv_font_t* preferred, const lv_font_t* fallback) {
-  return preferred ? preferred : fallback;
 }
 
 int scaled_label_width(lv_obj_t* label, int scale_x) {

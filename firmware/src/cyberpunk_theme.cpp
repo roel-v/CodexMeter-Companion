@@ -7,6 +7,7 @@
 #include "config.h"
 #include "c6_assets.h"
 #include "theme_fonts.h"
+#include "theme_label_helpers.h"
 
 namespace {
 
@@ -104,13 +105,6 @@ lv_obj_t* make_label(
   return label;
 }
 
-bool set_label_text_if_changed(lv_obj_t* label, const char* text) {
-  const char* current = lv_label_get_text(label);
-  if (current && strcmp(current, text) == 0) return false;
-  lv_label_set_text(label, text);
-  return true;
-}
-
 void make_display_text(
     lv_obj_t* label, lv_color_t color,
     int outline_width, int scale_x = 256, int scale_y = 256) {
@@ -130,11 +124,6 @@ void make_glow(
   lv_obj_set_style_shadow_width(obj, width, 0);
   lv_obj_set_style_shadow_spread(obj, spread, 0);
   lv_obj_set_style_shadow_opa(obj, opacity, 0);
-}
-
-const lv_font_t* font_or(
-    const lv_font_t* preferred, const lv_font_t* fallback) {
-  return preferred ? preferred : fallback;
 }
 
 void make_cutout(

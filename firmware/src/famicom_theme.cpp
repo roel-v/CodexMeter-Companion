@@ -9,6 +9,7 @@
 #include "config.h"
 #include "c6_assets.h"
 #include "theme_fonts.h"
+#include "theme_label_helpers.h"
 
 namespace {
 
@@ -154,13 +155,6 @@ lv_obj_t* make_label(
   return label;
 }
 
-bool set_label_text_if_changed(lv_obj_t* label, const char* text) {
-  const char* current = lv_label_get_text(label);
-  if (current && strcmp(current, text) == 0) return false;
-  lv_label_set_text(label, text);
-  return true;
-}
-
 void scale_label(
     lv_obj_t* label, int scale_x, int scale_y,
     int outline_width = 0) {
@@ -193,11 +187,6 @@ void center_scaled_label_x(
 int scaled_label_width(lv_obj_t* label, int scale_x) {
   lv_obj_update_layout(label);
   return (lv_obj_get_width(label) * scale_x + 128) / 256;
-}
-
-const lv_font_t* font_or(
-    const lv_font_t* preferred, const lv_font_t* fallback) {
-  return preferred ? preferred : fallback;
 }
 
 void rotate_rect(lv_obj_t* obj, int rotation_tenths) {

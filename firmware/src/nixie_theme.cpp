@@ -7,6 +7,7 @@
 #include "config.h"
 #include "c6_assets.h"
 #include "theme_fonts.h"
+#include "theme_label_helpers.h"
 #include "device_log.h"
 #include "nixie_counter_layout.h"
 
@@ -132,11 +133,6 @@ void strip_obj(lv_obj_t* obj) {
   lv_obj_remove_style_all(obj);
   lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
-}
-
-const lv_font_t* font_or(
-    const lv_font_t* preferred, const lv_font_t* fallback) {
-  return preferred ? preferred : fallback;
 }
 
 lv_font_t* create_font(

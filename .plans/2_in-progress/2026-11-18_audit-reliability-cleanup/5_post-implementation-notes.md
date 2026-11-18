@@ -40,3 +40,9 @@ Separated structural identity parsing from explicit model/application/transport 
 ### Phase 7 scaffolding
 Removed unconsumed discovery events/wait API and wait_any, ignored legacy success bookkeeping, and test-only exclusive_delivery. The dispatch-expiry test now holds the existing send lock directly. Discovery, legacy, coordinator, maintenance and audit regression suites: 79 passed.
 
+### Phase 7 theme helpers
+Compared bodies before extraction: nine label helpers differ only in signature wrapping; ten font helpers are identical.
+Shared header preserves unchanged/changed/null-current-text and font fallback behavior; native fake-LVGL checks pass.
+All three firmware targets built successfully. S3 RAM 127304, flash 1644887 (-228 versus prior capture-fix build);
+C6 RAM 54620, flash 2416660 (-324). Ball figures are recorded in the final verification table below.
+No layout, font asset or board behavior was changed. Existing compiler warnings remain in the retained build log.
