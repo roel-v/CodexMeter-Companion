@@ -53,8 +53,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("port")
     parser.add_argument("output", type=Path)
+    parser.add_argument("--device-id", help="Expected full registered identity")
     args = parser.parse_args()
     from maintenance import MaintenanceGuard
-    with MaintenanceGuard(args.port), SerialSession(args.port) as serial:
+    with MaintenanceGuard(args.port, args.device_id), SerialSession(args.port) as serial:
         capture(serial, args.output)
     print(args.output)

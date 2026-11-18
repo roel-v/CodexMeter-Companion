@@ -75,6 +75,7 @@ class Fixture:
         script='capture_c6_screen.py' if index==0 else 'capture_screenshot.py'
         output=self.out/f'{label}-{index}.png'
         args=[str(PORTS[index]),str(output)] if index==0 else [str(output),PORTS[index]]
+        args.extend(['--device-id', IDS[index]])
         # Source tool is an IPC client; source companion never runs in this matrix.
         toolenv=dict(self.env);toolenv['PYTHONPATH']=str(ROOT)
         p=subprocess.run([sys.executable,str(ROOT/'tools'/script),*args],env=toolenv,cwd=self.home,capture_output=True,text=True,timeout=90,creationflags=subprocess.CREATE_NO_WINDOW)

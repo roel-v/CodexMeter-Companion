@@ -21,7 +21,11 @@ async def acquire(port, device_id=None):
     rows = status.get('devices', {}).get('devices', []) if status else []
     matches = [d for d in rows if d.get('last_discovered_address') == port and d.get('last_discovery_source') == 'usb']
     raw, legacy = None, False
-    if len(matches) == 1:
+    if device_id and any(d['device_id'] == device_id for d in rows):
+        # The daemon owns discovery and verifies the live identity after pausing it.
+        # Opening the port here races its probe while this display is on BLE.
+        pass
+    elif len(matches) == 1:
         resolved = matches[0]['device_id']
         if device_id and resolved != device_id:
             raise RuntimeError('Maintenance device identity mismatch')

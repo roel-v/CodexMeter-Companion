@@ -123,3 +123,14 @@ in an isolated D: profile; the final package must pass this expanded check too.
 Removed unused protocol/helper imports left in the USB/BLE adapters and an unused BLE discovery type
 alias. Retained the original Chinese architecture document under architecture.upstream.md while
 replacing the current architecture guide. Adapter/discovery regression tests passed (recorded below).
+
+### Maintenance race found during physical acceptance
+
+USB task/total/cost captures passed after adding reconnect waits to the fixture. Bluetooth captures
+then exposed a tool-side race: maintenance.py opened the USB port to rediscover an already-known
+registered display while the daemon's USB discovery could own it. Capture tools now accept a full
+expected device ID and delegate directly to daemon maintenance; the daemon pauses discovery and
+verifies the identity before granting access. No identity check is removed. Validation: 35 maintenance
+and coordinator tests passed, including a no-probe-before-pause regression. Earlier failed runs and
+restoration logs remain retained. The high-rate initial fixture also observed a bounded serial-write
+failure and correctly refused maintenance until recovery; no process crash occurred.

@@ -10,7 +10,7 @@ from serial_device import SerialSession
 
 def run(args):
     args.output.mkdir(parents=True,exist_ok=True)
-    with MaintenanceGuard(args.port):
+    with MaintenanceGuard(args.port, args.device_id):
         if args.c6:
             from capture_c6_screen import capture
             with SerialSession(args.port) as serial:
@@ -27,4 +27,4 @@ def run(args):
                 (args.output/f'page-{page}.png').write_bytes(rgb565le_to_png(width,height,data))
             with SerialSession(args.port) as serial:serial.write_line('test_swipe');time.sleep(.3)
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('port');p.add_argument('output',type=Path);p.add_argument('--c6',action='store_true');run(p.parse_args())
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('port');p.add_argument('output',type=Path);p.add_argument('--c6',action='store_true');p.add_argument('--device-id');run(p.parse_args())

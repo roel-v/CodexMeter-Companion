@@ -119,6 +119,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("output", nargs="?", default="screenshot.png", help="PNG output path")
     parser.add_argument("port", nargs="?", help="USB serial port, e.g. /dev/cu.usbmodem211201")
     parser.add_argument("--device", help="CodexMeter short id, device id, name, or port basename")
+    parser.add_argument("--device-id", help="Expected full registered identity")
     parser.add_argument("--list", action="store_true", help="list identified CodexMeter serial devices")
     parser.add_argument(
         "--line-timeout",
@@ -153,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         port = resolve_port(args.port, device=args.device, timeout=args.line_timeout)
         from maintenance import MaintenanceGuard
-        with MaintenanceGuard(port):
+        with MaintenanceGuard(port, args.device_id):
             width, height, data = capture_rgb565le(
                 port, line_timeout=args.line_timeout, raw_timeout=args.raw_timeout,
                 pre_commands=args.command,

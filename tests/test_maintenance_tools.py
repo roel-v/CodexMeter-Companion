@@ -129,3 +129,22 @@ def test_direct_release_malformed_updated_identity_never_downgrades_to_legacy(mo
         with pytest.raises(RuntimeError,match='Malformed updated identity'):
             await module._release_once({'via':'direct','port':'P','device_id':ID,'token':'b'*32})
     asyncio.run(run())
+
+
+def test_known_registered_ble_identity_is_paused_before_any_port_probe(monkeypatch):
+    async def run():
+        events=[]
+        async def send(event):
+            events.append(event)
+            if event['type']=='ping':
+                return {'ok':True,'devices':{'devices':[{'device_id':ID,'transport':'bluetooth'}]}}
+            assert event == {'type':'maintenance_acquire','device_id':ID,'port':'P','tool':True}
+            return {'ok':True,'ready':True,'device_id':ID,'port':'P','token':'b'*32}
+        async def forbidden(*args,**kwargs):
+            raise AssertionError('Tool raced daemon discovery before maintenance')
+        monkeypatch.setattr(module,'send_event',send)
+        monkeypatch.setattr(module,'inspect_maintenance_identity',forbidden)
+        monkeypatch.setattr(module,'maintenance_connection',forbidden)
+        assert (await module.acquire('P',ID))['via']=='daemon'
+        assert len(events)==2
+    asyncio.run(run())
