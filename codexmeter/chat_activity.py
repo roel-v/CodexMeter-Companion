@@ -12,7 +12,6 @@ import json
 import logging
 import os
 from pathlib import Path
-import sqlite3
 import struct
 import time
 import uuid
@@ -20,7 +19,7 @@ import uuid
 from .payloads import Payload, build_activity_payload
 from .compatibility import ContractError, report_error, SupersededObservation
 from .compatibility_readers import read_unread_snapshot
-from .compatibility_readers import read_roots, read_unread, validate_state
+from .compatibility_readers import read_roots, validate_state
 
 FIELDS = {"threadRuntimeStatus", "hasUnreadTurn", "parentThreadId", "source"}
 from .ipc_projection import CHUNK, receive_metadata
@@ -40,12 +39,6 @@ def apply_stream_change(states: dict, tid: str, version: int, change: dict) -> N
         validate_state(states[tid]["state"])
     except (KeyError, TypeError, IndexError):
         raise ContractError(field="patch") from None
-
-
-def read_inventory(home: Path) -> tuple[set[str], set[str]]:
-    """Read indexed metadata only; no transcripts, credentials, or DB writes."""
-    roots = read_roots(home)
-    return roots, read_unread(home, roots)
 
 
 def apply_change(states: dict, tid: str, change: dict) -> None:

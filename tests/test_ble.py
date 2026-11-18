@@ -1,7 +1,7 @@
 import asyncio
 
 from codexmeter.device_identity import DeviceIdentity, DeviceIdentityError
-from codexmeter.delivery import DeliveryState
+from codexmeter.delivery import DeliveryState, remember_desired, remember_accepted, should_send
 from codexmeter.ble import BleAckError, BleAckTimeout, BleAckTracker, BleConnectTimeout, BleNotifyError, BleTransport, BleWriteTimeout
 from codexmeter.payloads import (
     build_activity_payload,
@@ -106,7 +106,7 @@ def test_ble_skips_stale_screen_on_when_connect_wake_is_disabled():
     transport = BleTransport()
     payload = build_screen_control_payload(True, "mac_unlocked", now=1)
 
-    assert transport._should_write_payload(payload, state) is False
+    assert should_send(payload, state) is False
 
 
 def test_ble_allows_screen_off_when_connect_wake_is_disabled():
@@ -114,15 +114,7 @@ def test_ble_allows_screen_off_when_connect_wake_is_disabled():
     transport = BleTransport()
     payload = build_screen_control_payload(False, "mac_locked", now=1)
 
-    assert transport._should_write_payload(payload, state) is True
-
-
-def test_ble_connected_lookup_requires_expected_device_name():
-    transport = BleTransport(device_name="CodexMeter")
-
-    assert transport._connected_name_matches("CodexMeter") is True
-    assert transport._connected_name_matches("Clawdmeter") is False
-    assert transport._connected_name_matches(None) is False
+    assert should_send(payload, state) is True
 
 
 def test_ble_write_payload_times_out_when_gatt_write_stalls():
@@ -334,6 +326,6 @@ def test_ble_remembers_latest_desired_state_before_ack():
     state = DeliveryState()
     payload = build_activity_payload(3, now=1)
 
-    BleTransport.remember_desired(payload, state)
+    remember_desired(payload, state)
 
     assert state.last_activity == payload

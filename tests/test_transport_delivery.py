@@ -1,6 +1,6 @@
 import asyncio
 import time
-from codexmeter.delivery import DeliveryState
+from codexmeter.delivery import DeliveryState, remember_desired, remember_accepted, should_send
 from codexmeter.ble import BleTransport
 from codexmeter.device_manager import DeviceManager
 from codexmeter.device_registry import config_from_short_id
@@ -11,15 +11,15 @@ def test_delivery_characterization_latest_and_pending_alert():
     state = DeliveryState()
     old = Payload("usage", {"k": "usage", "t": 1})
     new = Payload("usage", {"k": "usage", "t": 2})
-    BleTransport.remember_desired(old, state)
-    BleTransport.remember_desired(new, state)
-    BleTransport._remember_payload(old, state)
+    remember_desired(old, state)
+    remember_desired(new, state)
+    remember_accepted(old, state)
     assert state.last_usage is new
     assert state.last_payload is old
-    assert not BleTransport()._should_write_payload(old, state)
+    assert not should_send(old, state)
     alert = Payload("alert", {"id": "a", "t": time.time()})
     state.pending_alert = alert
-    assert BleTransport()._should_write_payload(alert, state)
+    assert should_send(alert, state)
     assert state.pending_alert is alert
 
 
@@ -70,7 +70,7 @@ def test_monotonic_alert_ledger_and_fresh_replay():
 
 
 def test_explicit_replay_requires_original_boot_revision_and_same_host():
-    from codexmeter.delivery import DeliveryState, negotiated_replay
+    from codexmeter.delivery import DeliveryState, remember_desired, remember_accepted, should_send, negotiated_replay
 
     state = DeliveryState()
     p = Payload("control", {"cmd": "brightness", "value": 50})
@@ -92,10 +92,10 @@ def test_legacy_replay_never_refreshes_observation_time():
 
     state = DeliveryState()
     p = Payload("usage", {"k": "usage"})
-    BleTransport.remember_desired(p, state)
+    remember_desired(p, state)
     state.observed_at["usage"] = time.monotonic() - 301
     before = state.observed_at["usage"]
     # A legacy reconnect/ACK uses accepted-state bookkeeping, never producer observation.
-    BleTransport._remember_payload(p, state)
+    remember_accepted(p, state)
     assert state.observed_at["usage"] == before
     assert negotiated_replay(state, same_host=True) == []

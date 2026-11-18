@@ -4,7 +4,7 @@ import time
 from dataclasses import replace
 import pytest
 from codexmeter.device_identity import DeviceIdentity, DeviceIdentityError
-from codexmeter.delivery import DeliveryState
+from codexmeter.delivery import DeliveryState, remember_desired, remember_accepted, should_send
 from codexmeter.ble import BleTransport
 from codexmeter.device_metadata import DeviceMetadata
 from codexmeter.device_registry import DeviceConfig, DeviceRegistry
@@ -80,17 +80,17 @@ def test_controls_fail_closed_for_unsupported_or_disabled_device():
 
 def test_old_ack_and_queued_snapshot_do_not_replace_new_desired_state():
     state=DeliveryState(); old=Payload('usage',{'t':1}); new=Payload('usage',{'t':2})
-    BleTransport.remember_desired(new,state)
-    BleTransport._remember_payload(old,state)
+    remember_desired(new,state)
+    remember_accepted(old,state)
     assert state.last_usage is new
-    assert not BleTransport()._should_write_payload(old,state)
-    assert BleTransport()._should_write_payload(new,state)
+    assert not should_send(old,state)
+    assert should_send(new,state)
 
 
 def test_expired_alert_is_not_replayed():
     transport=BleTransport();state=DeliveryState()
-    assert not transport._should_write_payload(Payload('alert',{'t':time.time()-61}),state)
-    assert transport._should_write_payload(Payload('alert',{'t':time.time()}),state)
+    assert not should_send(Payload('alert',{'t':time.time()-61}),state)
+    assert should_send(Payload('alert',{'t':time.time()}),state)
 
 
 def test_control_queue_keeps_distinct_settings_but_coalesces_same_setting():

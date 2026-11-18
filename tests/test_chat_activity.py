@@ -3,7 +3,7 @@ import sqlite3
 
 import pytest
 
-from codexmeter.chat_activity import ChatActivity, apply_change, count_chats, read_inventory
+from codexmeter.chat_activity import ChatActivity, apply_change, count_chats
 
 
 def snapshot(status="idle", unread=False, **extra):
@@ -64,7 +64,9 @@ def test_inventory_only_completed_unread_roots(tmp_path):
         "electron-thread-read-state-v1": {"unreadByIdentity": {"account": {
             "local:host": ["done", "old-running", "interrupted", "child", "archive"],
             "durable:remote": ["read"]}}}}))
-    roots, done = read_inventory(tmp_path)
+    from codexmeter.compatibility_readers import read_roots, read_unread
+    roots = read_roots(tmp_path)
+    done = read_unread(tmp_path, roots)
     assert roots == {"done", "read", "old-running", "interrupted"}
     assert done == {"done"}
     assert count_chats(roots, done, {}) == (0, 0, 1)

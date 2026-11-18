@@ -12,6 +12,7 @@ from .device_identity import DeviceIdentity
 from .ble import BleTransport
 from .device_registry import DeviceConfig, default_legacy_device, is_full_device_id, normalize_device_id
 from .payloads import Payload
+from .delivery import remember_desired
 from .queueing import put_latest
 from .settings import DEVICE_NAME
 from .supervision import supervise
@@ -71,7 +72,7 @@ class DeviceManager:
             scan_timeout_sec=scan_timeout_sec,
             scan_interval_sec=scan_interval_sec,
         )
-        self._transport_options = dict(scan_timeout_sec=scan_timeout_sec,
+        self._transport_options = dict(
             connect_timeout_sec=min(5, connect_timeout_sec), disconnect_timeout_sec=min(.5, disconnect_timeout_sec),
             write_timeout_sec=write_timeout_sec, ack_timeout_sec=ack_timeout_sec,
             notify_timeout_sec=notify_timeout_sec, healthcheck_interval_sec=healthcheck_interval_sec)
@@ -80,8 +81,6 @@ class DeviceManager:
                 slot,
                 self.discovery,
                 BleTransport(
-                    device_name=slot.config.name or DEVICE_NAME,
-                    scan_timeout_sec=scan_timeout_sec,
                     connect_timeout_sec=min(5, connect_timeout_sec),
                     disconnect_timeout_sec=min(.5, disconnect_timeout_sec),
                     write_timeout_sec=write_timeout_sec,
@@ -212,7 +211,7 @@ class DeviceManager:
                 slot = DeviceSlot(config)
                 self.slots.append(slot)
                 self._workers.append(DeviceWorker(slot, self.discovery,
-                    BleTransport(device_name=config.name or DEVICE_NAME, **self._transport_options),
+                    BleTransport(**self._transport_options),
                     self._identity_observer))
         for device_id, coordinator in current.items():
             if not any(config.device_id == device_id for config in loaded.devices):
@@ -253,7 +252,7 @@ class DeviceManager:
             slot = DeviceSlot(config)
             self.slots.append(slot)
             self._workers.append(DeviceWorker(slot, self.discovery,
-                BleTransport(device_name=config.name or DEVICE_NAME, **self._transport_options),
+                BleTransport(**self._transport_options),
                 self._identity_observer))
             self._coordinators_init()
             return {'ok':True, **config.to_json()}
@@ -286,7 +285,7 @@ class DeviceManager:
 
     async def broadcast(self, payload: Payload) -> None:
         for slot in self.slots:
-            BleTransport.remember_desired(payload, slot.state)
+            remember_desired(payload, slot.state)
             await put_latest(slot.queue, payload)
 
     def _persist_config(self, slot, updated):
@@ -449,7 +448,7 @@ class DeviceManager:
             found=self.usb_discovery.find(slot.config) if slot.state.transport=='usb' else None
             if found: slot.state.explicit_intents[id(payload)]=(found.identity.boot,observed['rev'],time.monotonic())
             slot.state.explicit_payloads[id(payload)]=payload
-        BleTransport.remember_desired(payload, slot.state)
+        remember_desired(payload, slot.state)
         await put_latest(slot.queue, payload)
         return {"ok": True, "queued": command, "device_id": device_id}
 

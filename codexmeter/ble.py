@@ -17,11 +17,9 @@ from .settings import (
     BLE_HEALTHCHECK_INTERVAL_SEC,
     BLE_NOTIFY_TIMEOUT_SEC,
     BLE_WRITE_TIMEOUT_SEC,
-    DEVICE_NAME,
     IDENTITY_CHAR_UUID,
     REQ_CHAR_UUID,
     RX_CHAR_UUID,
-    SCAN_TIMEOUT_SEC,
     SERVICE_UUID,
     TX_CHAR_UUID,
 )
@@ -90,12 +88,6 @@ class MacConnectedDeviceLookup:
             return []
 
 
-async def retrieve_connected_devices_macos(
-    service_uuids: tuple[str, ...] = (SERVICE_UUID, "1812"),
-) -> list[Any]:
-    return await MacConnectedDeviceLookup(service_uuids)()
-
-
 class BleWriteTimeout(RuntimeError):
     """Raised when CoreBluetooth accepts a connection but a GATT write stalls."""
 
@@ -146,7 +138,6 @@ class BleAckTracker:
         return self.last_text
 
 
-# Compatibility name: state is owned by DeviceSlot, never by a connection.
 from .delivery import DeliveryState
 from .delivery import remember_accepted, remember_desired, should_send
 
@@ -154,8 +145,6 @@ from .delivery import remember_accepted, remember_desired, should_send
 class BleTransport:
     def __init__(
         self,
-        device_name: str = DEVICE_NAME,
-        scan_timeout_sec: float = SCAN_TIMEOUT_SEC,
         connect_timeout_sec: float = BLE_CONNECT_TIMEOUT_SEC,
         disconnect_timeout_sec: float = BLE_DISCONNECT_TIMEOUT_SEC,
         write_timeout_sec: float = BLE_WRITE_TIMEOUT_SEC,
@@ -163,95 +152,12 @@ class BleTransport:
         notify_timeout_sec: float = BLE_NOTIFY_TIMEOUT_SEC,
         healthcheck_interval_sec: float = BLE_HEALTHCHECK_INTERVAL_SEC,
     ) -> None:
-        self.device_name = device_name
-        self.scan_timeout_sec = scan_timeout_sec
         self.connect_timeout_sec = connect_timeout_sec
         self.disconnect_timeout_sec = disconnect_timeout_sec
         self.write_timeout_sec = write_timeout_sec
         self.ack_timeout_sec = ack_timeout_sec
         self.notify_timeout_sec = notify_timeout_sec
         self.healthcheck_interval_sec = healthcheck_interval_sec
-        self._connected_lookup = MacConnectedDeviceLookup()
-
-    async def run(
-        self,
-        queue: "asyncio.Queue[Payload]",
-        state: DeliveryState,
-        stop_event: asyncio.Event,
-    ) -> None:
-        backoff = 1.0
-        while not stop_event.is_set():
-            try:
-                target = await self._discover()
-                if target is None:
-                    log.info(
-                        "BLE device %s not found; retrying in %.0fs",
-                        self.device_name,
-                        backoff,
-                    )
-                    await _sleep_or_stop(stop_event, backoff)
-                    backoff = min(backoff * 2, 60.0)
-                    continue
-
-                used = await self._connect_and_write(target, queue, state, stop_event)
-                backoff = 1.0 if used else min(backoff * 2, 60.0)
-            except asyncio.CancelledError:
-                raise
-            except (
-                BleConnectTimeout,
-                BleWriteTimeout,
-                BleAckTimeout,
-                BleAckError,
-                BleNotifyError,
-            ) as exc:
-                state.connected = False
-                state.consecutive_failures += 1
-                state.last_error = str(exc)
-                log.warning("%s; reconnecting in %.0fs", exc, backoff)
-                await _sleep_or_stop(stop_event, backoff)
-                backoff = min(backoff * 2, 60.0)
-            except Exception:
-                state.connected = False
-                state.consecutive_failures += 1
-                state.last_error = "BLE loop error"
-                log.exception("BLE loop error")
-                await _sleep_or_stop(stop_event, backoff)
-                backoff = min(backoff * 2, 60.0)
-
-    async def _discover(self) -> Any | None:
-        try:
-            from bleak import BleakScanner
-        except ImportError as exc:
-            raise RuntimeError("bleak is required for BLE support") from exc
-
-        if sys.platform == "darwin":
-            connected = await self._retrieve_connected_macos()
-            if connected is not None:
-                return connected
-
-        log.info("Scanning for BLE device %s", self.device_name)
-        return await BleakScanner.find_device_by_name(
-            self.device_name, timeout=self.scan_timeout_sec
-        )
-
-    async def _retrieve_connected_macos(self) -> Any | None:
-        """Return a CoreBluetooth-connected peripheral when scans cannot see it."""
-
-        for device in await self._connected_lookup():
-            name = getattr(device, "name", None)
-            if not self._connected_name_matches(name):
-                log.debug("Skipping connected BLE peripheral %s", name or "<unnamed>")
-                continue
-            log.info(
-                "Found connected BLE peripheral %s [%s]",
-                name,
-                getattr(device, "address", "<unknown>"),
-            )
-            return device
-        return None
-
-    def _connected_name_matches(self, name: Any) -> bool:
-        return name is not None and str(name) == self.device_name
 
     def _create_client(self, target: Any) -> Any:
         from bleak import BleakClient
@@ -340,7 +246,7 @@ class BleTransport:
 
             try:
                 reconnect_control = state.desired_control or state.connect_control
-                if reconnect_control is not None and self._should_write_payload(
+                if reconnect_control is not None and should_send(
                     reconnect_control, state
                 ):
                     await self._write_payload(
@@ -359,7 +265,7 @@ class BleTransport:
                         client, state.last_activity, ack_tracker, state
                     )
                     used_successfully = True
-                if state.pending_alert is not None and not self._should_write_payload(state.pending_alert, state):
+                if state.pending_alert is not None and not should_send(state.pending_alert, state):
                     state.pending_alert = None
                 if state.pending_alert is not None:
                     pending_alert = state.pending_alert
@@ -393,7 +299,7 @@ class BleTransport:
                     if not client.is_connected:
                         break
                     if payload is not None:
-                        if not self._should_write_payload(payload, state):
+                        if not should_send(payload, state):
                             log.info("Skipped stale BLE payload %s", payload.kind)
                             if state.pending_alert is payload:
                                 state.pending_alert = None
@@ -532,7 +438,7 @@ class BleTransport:
             ) from exc
         self._require_ack(payload, ack_text)
         if state is not None:
-            self._remember_payload(payload, state)
+            remember_accepted(payload, state)
             state.last_ack_at = loop.time()
             state.consecutive_failures = 0
             state.last_error = None
@@ -565,14 +471,6 @@ class BleTransport:
             ) from exc
 
     @staticmethod
-    def _remember_payload(payload: Payload, state: DeliveryState) -> None:
-        return remember_accepted(payload, state)
-
-    @staticmethod
-    def remember_desired(payload: Payload, state: DeliveryState) -> None:
-        return remember_desired(payload, state)
-
-    @staticmethod
     def _require_ack(payload: Payload, text: str) -> None:
         try:
             data = json.loads(text)
@@ -580,9 +478,6 @@ class BleTransport:
             raise BleAckError(f"BLE ACK for {payload.kind} was invalid: {text!r}") from exc
         if not isinstance(data, dict) or data.get("ack") is not True:
             raise BleAckError(f"BLE NACK for {payload.kind}: {text}")
-
-    def _should_write_payload(self, payload: Payload, state: DeliveryState) -> bool:
-        return should_send(payload, state)
 
     def _on_ack(
         self,
@@ -595,13 +490,6 @@ class BleTransport:
         else:
             text = bytes(data).decode("utf-8", errors="replace")
         log.debug("BLE ack: %s", text)
-
-
-async def _sleep_or_stop(stop_event: asyncio.Event, seconds: float) -> None:
-    try:
-        await asyncio.wait_for(stop_event.wait(), timeout=seconds)
-    except asyncio.TimeoutError:
-        pass
 
 
 class contextlib_suppress_bleak:

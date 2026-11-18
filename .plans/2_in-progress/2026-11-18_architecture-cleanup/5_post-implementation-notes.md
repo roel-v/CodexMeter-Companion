@@ -79,3 +79,10 @@ Validation: native protocol/view-model harness passed; all three PlatformIO targ
 including the original S3 compile-only target. Static RAM is unchanged from the retained baseline.
 The full Python run during compilation had two 2-second offline subprocess timeouts (378 passed);
 a subsequent isolated hook/launcher run passed all 15. Final suite will run without compiler load.
+
+## Phase 7 — Obsolete host paths
+
+Removed the unused single-display BLE discovery/run loop and its private name filter, duplicate
+sleep helper and connected-lookup wrapper. Production macOS lookup remains in multi-device discovery.
+Removed BLE delivery forwarding methods and the test-only inventory wrapper; consumers now call
+the common implementations directly. Validation: 79 affected tests passed.
