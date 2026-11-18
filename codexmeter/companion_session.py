@@ -237,7 +237,7 @@ class CompanionSession:
         return dict(self.state)
 
     async def send(
-        self, payload: Payload, *, expected_boot=None, expected_revision=None
+        self, payload: Payload, *, expected_boot=None, expected_revision=None, intent_deadline=None
     ) -> DeliveryResult:
         async with self._send_lock:
             if self._seq > UINT32:
@@ -248,6 +248,9 @@ class CompanionSession:
                     "why"
                 ) in ("lock", "unlock")
                 if not policy:
+                    if intent_deadline is not None and self.clock() >= intent_deadline:
+                        return DeliveryResult("rejected", self.transport, self.generation,
+                                              None, "expired explicit intent")
                     if expected_boot != self.identity.boot or expected_revision is None:
                         return DeliveryResult(
                             "rejected",

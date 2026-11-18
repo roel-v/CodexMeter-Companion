@@ -30,6 +30,7 @@ class DeliveryState:
     last_payload: Payload | None = None
     connect_control: Payload | None = None
     desired_control: Payload | None = None
+    desired_policy: Payload | None = None
     desired_settings: dict[str, Payload] = field(default_factory=dict)
     pending_alert: Payload | None = None
     observed_device_id: str | None = None
@@ -88,6 +89,9 @@ def remember_accepted(payload: Payload, state: DeliveryState) -> None:
     elif payload.kind == "control":
         if payload.data.get("cmd") in ("brightness", "rotation"):
             state.desired_settings.setdefault(str(payload.data["cmd"]), payload)
+        elif payload.data.get("why") in ("lock", "unlock", "connection_restored"):
+            if state.desired_policy is None:
+                state.desired_policy = payload
         elif state.desired_control is None:
             state.desired_control = payload
 
@@ -106,6 +110,8 @@ def remember_desired(payload: Payload, state: DeliveryState) -> None:
     elif payload.kind == "control":
         if payload.data.get("cmd") in ("brightness", "rotation"):
             state.desired_settings[str(payload.data["cmd"])] = payload
+        elif payload.data.get("why") in ("lock", "unlock", "connection_restored"):
+            state.desired_policy = payload
         else:
             state.desired_control = payload
 
@@ -131,7 +137,8 @@ def should_send(payload: Payload, state: DeliveryState) -> bool:
         return True
     if payload.data.get("cmd") != "screen":
         return True
-    if payload.data.get("on") is True and state.connect_control is None:
+    if (payload.data.get("on") is True and state.connect_control is None
+            and payload.data.get("why") != "manual"):
         return False
     return True
 
@@ -187,3 +194,17 @@ def negotiated_replay(state: DeliveryState, *, same_host: bool, now=None):
                 result.append(state.explicit_payloads[key])
         result.extend(p for _, p in state.alerts)
     return result
+
+
+def discard_intents(state: DeliveryState, payloads):
+    """Eviction is final: never replay an explicit request removed from the queue."""
+    for payload in payloads:
+        state.explicit_intents.pop(id(payload), None)
+        state.explicit_payloads.pop(id(payload), None)
+        if state.desired_control is payload:
+            state.desired_control = None
+        if state.desired_policy is payload:
+            state.desired_policy = None
+        command = payload.data.get("cmd")
+        if state.desired_settings.get(command) is payload:
+            state.desired_settings.pop(command, None)

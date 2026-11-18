@@ -56,6 +56,8 @@ def test_incompatible_worker_is_independent():
 def test_targeted_settings_and_full_queue_do_not_block_other_displays():
     async def run():
         m=manager([config(i, 'spotpear_ball_v2' if i%2 else 'waveshare_c6_amoled_216') for i in range(4)])
+        m.slots[1].state.connected = True
+        m.slots[1].state.device_state = {'boot': 'a'*16, 'rev': 1}
         for i in range(32): await m.slots[0].queue.put(Payload('alert',{'id':i}))
         for command,value in [('brightness',30),('rotation',90)]:
             await m.control_device(dict(device_id=config(1).device_id,command=command,value=value))

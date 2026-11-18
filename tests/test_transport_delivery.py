@@ -34,6 +34,7 @@ def test_delivery_characterization_control_and_status():
             notify_timeout_sec=0.1,
             healthcheck_interval_sec=1,
         )
+        manager.slots[0].state.connected = True  # legacy connection has no revision state
         await manager.control_device(
             {
                 "device_id": manager.slots[0].config.device_id,
@@ -45,7 +46,7 @@ def test_delivery_characterization_control_and_status():
         assert state.desired_control.data["why"] == "manual"
         assert state.desired_control.data["v"] == 1
         assert manager.status()["devices"][0]["queue_depth"] == 1
-        assert manager.status()["connected_count"] == 0
+        assert manager.status()["connected_count"] == 1
 
     asyncio.run(run())
 

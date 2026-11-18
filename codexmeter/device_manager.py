@@ -12,7 +12,7 @@ from .device_identity import DeviceIdentity
 from .ble import BleTransport
 from .device_registry import DeviceConfig, default_legacy_device, is_full_device_id, normalize_device_id
 from .payloads import Payload
-from .delivery import remember_desired
+from .delivery import remember_desired, discard_intents
 from .queueing import put_latest
 from .settings import DEVICE_NAME, AUTO_SCREEN_TIMEOUT_SEC
 from .supervision import supervise
@@ -286,7 +286,7 @@ class DeviceManager:
     async def broadcast(self, payload: Payload) -> None:
         for slot in self.slots:
             remember_desired(payload, slot.state)
-            await put_latest(slot.queue, payload)
+            discard_intents(slot.state, await put_latest(slot.queue, payload))
 
     def _persist_config(self, slot, updated):
         if self.registry is not None:
@@ -414,11 +414,25 @@ class DeviceManager:
 
     async def control_device(self, event: dict) -> dict:
         device_id = event.get("device_id")
+        if device_id is None:
+            results = []
+            for target in self.slots:
+                try:
+                    result = await self.control_device({**event, "device_id": target.config.device_id})
+                except ValueError as exc:
+                    result = {"ok": False, "device_id": target.config.device_id, "error": str(exc)}
+                results.append(result)
+            return {"ok": bool(results) and all(r["ok"] for r in results), "results": results,
+                    "queued": sum(r["ok"] for r in results)}
         slot = next((s for s in self.slots if s.config.device_id == device_id), None)
         if slot is None or not slot.config.enabled or slot.config.maintenance:
             raise ValueError("Select an enabled display outside maintenance")
         if not slot.config.metadata.compatible:
             raise ValueError("Display protocol is incompatible")
+        if not slot.state.connected:
+            raise ValueError("Display must be connected before changing settings")
+        if slot.state.transport == "usb" and not slot.state.device_state:
+            raise ValueError("Verified device state required")
         command = event.get("command")
         capability = {"screen": "screen", "brightness": "brightness", "rotation": "rotation"}.get(command)
         if capability is None:
@@ -452,7 +466,7 @@ class DeviceManager:
             if found: slot.state.explicit_intents[id(payload)]=(found.identity.boot,observed['rev'],time.monotonic())
             slot.state.explicit_payloads[id(payload)]=payload
         remember_desired(payload, slot.state)
-        await put_latest(slot.queue, payload)
+        discard_intents(slot.state, await put_latest(slot.queue, payload))
         return {"ok": True, "queued": command, "device_id": device_id}
 
     def set_connect_control(self, payload: Payload | None) -> None:

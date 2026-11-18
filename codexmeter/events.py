@@ -349,12 +349,12 @@ class EventServer:
         if event_type == "task_complete":
             return await self._dispatch_task_complete(event)
         if event_type == "screen":
-            on = bool(event.get("on"))
-            reason = str(event.get("reason") or "manual")
-            payload = build_screen_control_payload(on, reason=reason)
-            await self.sink(payload)
-            log.info("Queued screen control on=%s reason=%s", on, reason)
-            return {"ok": True, "queued": "screen", "on": on}
+            if self.device_controller is None:
+                raise ValueError("Device controls unavailable")
+            if event.get("reason", "manual") != "manual":
+                raise ValueError("Screen commands accept only the manual reason")
+            return await self.device_controller({"device_id": event.get("device_id"),
+                "command": "screen", "value": event.get("on")})
         if event_type in ("task_start", "task_finish", "activity"):
             return await self._dispatch_activity(event)
         if event_type == "usage":

@@ -618,24 +618,16 @@ def test_task_complete_alert_carries_remaining_activity_count():
     asyncio.run(scenario())
 
 
-def test_screen_event_queues_control_payload():
+def test_screen_event_requires_manual_control_admission():
     async def scenario():
-        payloads = []
-
-        async def sink(payload):
-            payloads.append(payload)
-
-        server = EventServer(sink)
-        result = await server._dispatch(
-            {"type": "screen", "on": False, "reason": "manual"}
-        )
-
-        assert result == {"ok": True, "queued": "screen", "on": False}
-        assert payloads[-1].kind == "control"
-        assert payloads[-1].data["cmd"] == "screen"
-        assert payloads[-1].data["on"] is False
-        assert payloads[-1].data["why"] == "manual"
-
+        requests = []
+        async def controller(event):
+            requests.append(event)
+            return {"ok": True, "queued": "screen"}
+        server = EventServer(lambda p: None, device_controller=controller)
+        result = await server._dispatch({"type":"screen", "on":False, "reason":"manual"})
+        assert result == {"ok": True, "queued": "screen"}
+        assert requests == [{"device_id":None, "command":"screen", "value":False}]
     asyncio.run(scenario())
 
 

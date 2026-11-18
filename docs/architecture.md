@@ -62,3 +62,8 @@ simulations does not establish those hardware results.
 
 The [original upstream architecture notes (Chinese)](architecture.upstream.md) are retained as historical reference.
 They describe the earlier macOS/S3 design, not the current implementation.
+
+Manual screen commands: `screen-on` / `screen-off` broadcast to registered displays, or accept `--device-id FULL_ID`.
+They return per-device admission results; disabled, disconnected or maintenance targets are rejected. Partial failure
+returns a nonzero exit status. A queued response is not an application acknowledgement. Only `--reason manual` is
+accepted; automatic OS lock policy is internal and remains independent of manual screen state.

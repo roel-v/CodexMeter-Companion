@@ -9,7 +9,16 @@ from .payloads import Payload
 COALESCED_PAYLOAD_KINDS = {"usage", "activity", "control"}
 
 
-async def put_latest(queue: "asyncio.Queue[Payload]", payload: Payload) -> None:
+def coalescing_key(payload):
+    if payload.kind != "control":
+        return (payload.kind,)
+    command = payload.data.get("cmd")
+    policy = command == "screen" and payload.data.get("why") in ("lock", "unlock", "connection_restored")
+    return ("control", command, "policy" if policy else "manual")
+
+
+async def put_latest(queue: "asyncio.Queue[Payload]", payload: Payload) -> list[Payload]:
+    removed = []
     if payload.kind in COALESCED_PAYLOAD_KINDS:
         kept: list[Payload] = []
         while True:
@@ -17,27 +26,32 @@ async def put_latest(queue: "asyncio.Queue[Payload]", payload: Payload) -> None:
                 existing = queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
-            if (existing.kind != payload.kind or
-                    (payload.kind == "control" and existing.data.get("cmd") != payload.data.get("cmd"))):
+            if coalescing_key(existing) != coalescing_key(payload):
                 kept.append(existing)
+            else:
+                removed.append(existing)
         for existing in kept:
             await queue.put(existing)
 
     if queue.full():
-        await _drop_oldest_replaceable(queue)
+        removed.extend(await _drop_oldest_replaceable(queue))
     await queue.put(payload)
+    return removed
 
 
-async def _drop_oldest_replaceable(queue: "asyncio.Queue[Payload]") -> None:
+async def _drop_oldest_replaceable(queue: "asyncio.Queue[Payload]") -> list[Payload]:
+    removed = []
     kept: list[Payload] = []
     dropped = False
     while not queue.empty():
         existing = queue.get_nowait()
         if not dropped and existing.kind != "alert":
             dropped = True
+            removed.append(existing)
             continue
         kept.append(existing)
     if not dropped and kept:
-        kept.pop(0)
+        removed.append(kept.pop(0))
     for existing in kept:
         await queue.put(existing)
+    return removed

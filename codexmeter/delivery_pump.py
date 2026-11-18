@@ -1,7 +1,7 @@
 """Shared replay and delivery semantics for negotiated display sessions."""
 import time
 from .transport_types import TransportSession, TransportError
-from .delivery import TELEMETRY_REPLAY_TTL_SEC, remember_accepted, should_send, accepted_alert, prune_alerts
+from .delivery import EXPLICIT_INTENT_TTL_SEC, TELEMETRY_REPLAY_TTL_SEC, remember_accepted, should_send, accepted_alert, prune_alerts
 from .payloads import Payload
 
 
@@ -33,8 +33,9 @@ class DeliveryPump:
             if why == "connection_restored":
                 return
         state.last_write_at = time.monotonic()
+        deadline = {"intent_deadline": expected[2] + EXPLICIT_INTENT_TTL_SEC} if expected else {}
         result = await self.session.send(
-            payload,
+            payload, **deadline,
             expected_boot=expected[0] if expected else None,
             expected_revision=expected[1] if expected else None,
         )
