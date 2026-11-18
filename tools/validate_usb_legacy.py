@@ -40,7 +40,7 @@ def run(args):
   deadline=time.monotonic()+90
   while time.monotonic()<deadline:
    try:
-    status=f.event({'type':'ping'},original=True);rows=status['ble']['devices']
+    status=f.event({'type':'ping'},original=True);rows=status['devices']['devices']
     if len(rows)>=2 and all(d['connected'] and d.get('last_ack_age_sec') is not None and d['last_ack_age_sec']<10 for d in rows):break
    except (OSError,ValueError):pass
    time.sleep(1)

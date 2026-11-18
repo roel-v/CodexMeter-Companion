@@ -4,15 +4,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from .delivery import (
-    remember_accepted,
-    should_send,
-    negotiated_replay,
-    accepted_alert,
-    prune_alerts,
-)
+from .delivery import negotiated_replay
 from .usb_transport import UsbSession
-from .payloads import Payload
 from .delivery_pump import DeliveryPump
 
 

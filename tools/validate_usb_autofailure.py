@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from codexmeter import usb_transport as usb
 from codexmeter.device_registry import DeviceRegistry
-from codexmeter.multi_ble import DeviceManager
+from codexmeter.device_manager import DeviceManager
 from codexmeter.payloads import build_activity_payload
 def fixture_activity():
  p=build_activity_payload(2);p.data.update(wait=3,done=4,chats=True);return p

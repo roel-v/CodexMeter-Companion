@@ -4,7 +4,8 @@ from types import SimpleNamespace
 import pytest
 from codexmeter.device_coordinator import DeviceCoordinator
 from codexmeter.device_registry import DeviceConfig, DeviceRegistry
-from codexmeter.multi_ble import DeviceSlot, DeviceManager
+from codexmeter.device_slot import DeviceSlot
+from codexmeter.device_manager import DeviceManager
 from codexmeter.usb_transport import UsbDiscovery, UsbCandidate
 from tests.test_usb_transport import FakeChannel, ID, H, B, discovered
 
@@ -311,7 +312,7 @@ def test_current_locked_policy_respects_timeout_after_fresh_os_read():
         await m._reconciled(m.slots[0].state,Session())
         assert sent[-1].data['on'] is True
         m.observe_lock(True,time.monotonic()-61)
-        m._live_policy.locked_since=time.monotonic()-61
+        m.policy.locked_since=time.monotonic()-61
         await m._reconciled(m.slots[0].state,Session())
         assert sent[-1].data['on'] is False and sent[-1].data['why']=='lock'
     asyncio.run(run())

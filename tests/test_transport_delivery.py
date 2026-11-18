@@ -1,13 +1,14 @@
 import asyncio
 import time
-from codexmeter.ble import BleState, BleTransport
-from codexmeter.multi_ble import DeviceManager
+from codexmeter.delivery import DeliveryState
+from codexmeter.ble import BleTransport
+from codexmeter.device_manager import DeviceManager
 from codexmeter.device_registry import config_from_short_id
 from codexmeter.payloads import Payload
 
 
 def test_delivery_characterization_latest_and_pending_alert():
-    state = BleState()
+    state = DeliveryState()
     old = Payload("usage", {"k": "usage", "t": 1})
     new = Payload("usage", {"k": "usage", "t": 2})
     BleTransport.remember_desired(old, state)
@@ -89,7 +90,7 @@ def test_explicit_replay_requires_original_boot_revision_and_same_host():
 def test_legacy_replay_never_refreshes_observation_time():
     from codexmeter.delivery import negotiated_replay
 
-    state = BleState()
+    state = DeliveryState()
     p = Payload("usage", {"k": "usage"})
     BleTransport.remember_desired(p, state)
     state.observed_at["usage"] = time.monotonic() - 301

@@ -94,10 +94,10 @@ async def monitor(args):
             try:
                 if previous and tick-previous["utc_epoch"]>75: issues.append("Sleep or observation gap over 75 seconds")
                 response=await asyncio.wait_for(send_event({"type":"ping"}),10)
-                devices=response.get("ble",{}).get("devices",[])
+                devices=response.get("devices",{}).get("devices",[])
                 expected=set(DEVICES.values())
                 assert {d["device_id"] for d in devices if d.get("enabled")}==expected,"Expected exactly the two test displays"
-                sample["ble"]=[{k:d.get(k) for k in ("device_id","connected","queue_depth","last_ack_age_sec",
+                sample["devices"]=[{k:d.get(k) for k in ("device_id","connected","queue_depth","last_ack_age_sec",
                     "consecutive_failures","last_error")} for d in devices]
                 diagnostic=json.loads((APP_DIR/"diagnostics"/"last-run.json").read_text())
                 sample["pid"]=diagnostic["pid"];sample["run_id"]=diagnostic["run_id"]

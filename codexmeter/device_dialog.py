@@ -110,7 +110,7 @@ def show_devices(parent):
                 if tag=='status':
                     refreshing=False
                     if result.get('ok'):
-                        new={d['device_id']:d for d in result.get('devices',result.get('ble',{})).get('devices',[])}
+                        new={d['device_id']:d for d in result.get('devices',{}).get('devices',[])}
                         devices.clear();devices.update(new)
                         for item in tree.get_children():
                             if item not in new: tree.delete(item)

@@ -38,7 +38,7 @@ def validate(binary: Path, output: Path):
         time.sleep(1)
     else:
         raise AssertionError(current)
-    assert current["ble"]["connected"] and current["tray"]["visible"]
+    assert current["devices"]["connected"] and current["tray"]["visible"]
     results["connected_status"] = current
 
     # No arguments must request the existing panel and exit, rather than create
@@ -89,7 +89,7 @@ def validate(binary: Path, output: Path):
     time.sleep(0.5)
     current = status()
     assert not current["tray"]["panel_open"]
-    assert current["tray"]["visible"] and current["ble"]["connected"]
+    assert current["tray"]["visible"] and current["devices"]["connected"]
     results["window_close_preserves_bridge"] = True
     results["final_status"] = current
     (output / "tray-live.json").write_text(json.dumps(results, indent=2), encoding="utf-8")

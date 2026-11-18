@@ -4,10 +4,14 @@ import time
 from dataclasses import replace
 import pytest
 from codexmeter.device_identity import DeviceIdentity, DeviceIdentityError
-from codexmeter.ble import BleState, BleTransport
+from codexmeter.delivery import DeliveryState
+from codexmeter.ble import BleTransport
 from codexmeter.device_metadata import DeviceMetadata
 from codexmeter.device_registry import DeviceConfig, DeviceRegistry
-from codexmeter.multi_ble import DeviceManager, DeviceSlot, DeviceWorker, DiscoveryService
+from codexmeter.device_manager import DeviceManager
+from codexmeter.device_slot import DeviceSlot
+from codexmeter.ble_worker import DeviceWorker
+from codexmeter.ble_discovery import DiscoveryService
 from codexmeter.payloads import Payload
 from codexmeter.queueing import put_latest
 from codexmeter.device_dialog import device_row
@@ -75,7 +79,7 @@ def test_controls_fail_closed_for_unsupported_or_disabled_device():
 
 
 def test_old_ack_and_queued_snapshot_do_not_replace_new_desired_state():
-    state=BleState(); old=Payload('usage',{'t':1}); new=Payload('usage',{'t':2})
+    state=DeliveryState(); old=Payload('usage',{'t':1}); new=Payload('usage',{'t':2})
     BleTransport.remember_desired(new,state)
     BleTransport._remember_payload(old,state)
     assert state.last_usage is new
@@ -84,7 +88,7 @@ def test_old_ack_and_queued_snapshot_do_not_replace_new_desired_state():
 
 
 def test_expired_alert_is_not_replayed():
-    transport=BleTransport();state=BleState()
+    transport=BleTransport();state=DeliveryState()
     assert not transport._should_write_payload(Payload('alert',{'t':time.time()-61}),state)
     assert transport._should_write_payload(Payload('alert',{'t':time.time()}),state)
 

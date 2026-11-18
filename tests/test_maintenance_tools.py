@@ -30,7 +30,7 @@ def test_ble_active_registered_tool_without_explicit_id_uses_daemon_pause(monkey
 def test_running_legacy_daemon_unsupported_maintenance_never_bypassed(monkeypatch):
     async def run():
         async def send(event):
-            if event['type']=='ping': return {'ok':True,'ble':{'devices':[{'device_id':ID}]}}
+            if event['type']=='ping': return {'ok':True,'devices':{'devices':[{'device_id':ID}]}}
             return {'ok':False,'error':'unsupported maintenance'}
         async def identity(port):return {'device_id':ID,'usb':1},False
         monkeypatch.setattr(module,'send_event',send);monkeypatch.setattr(module,'inspect_maintenance_identity',identity)

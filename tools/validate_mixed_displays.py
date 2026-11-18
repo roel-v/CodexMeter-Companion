@@ -11,7 +11,7 @@ import logging
 import time
 from pathlib import Path
 from codexmeter.device_registry import DeviceConfig
-from codexmeter.multi_ble import DeviceManager
+from codexmeter.device_manager import DeviceManager
 from codexmeter.payloads import Payload
 from validate_ball_ui import usage, activity
 

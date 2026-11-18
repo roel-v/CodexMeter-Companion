@@ -147,7 +147,7 @@ class BleAckTracker:
 
 
 # Compatibility name: state is owned by DeviceSlot, never by a connection.
-from .delivery import DeliveryState as BleState
+from .delivery import DeliveryState
 from .delivery import remember_accepted, remember_desired, should_send
 
 
@@ -176,7 +176,7 @@ class BleTransport:
     async def run(
         self,
         queue: "asyncio.Queue[Payload]",
-        state: BleState,
+        state: DeliveryState,
         stop_event: asyncio.Event,
     ) -> None:
         backoff = 1.0
@@ -276,7 +276,7 @@ class BleTransport:
         self,
         target: Any,
         queue: "asyncio.Queue[Payload]",
-        state: BleState,
+        state: DeliveryState,
         stop_event: asyncio.Event,
         *,
         require_identity: bool = False,
@@ -458,7 +458,7 @@ class BleTransport:
         self,
         target: Any,
         queue: "asyncio.Queue[Payload]",
-        state: BleState,
+        state: DeliveryState,
         stop_event: asyncio.Event,
         *,
         require_identity: bool = False,
@@ -490,9 +490,16 @@ class BleTransport:
         client: Any,
         payload: Payload,
         ack_tracker: BleAckTracker | None = None,
-        state: BleState | None = None,
+        state: DeliveryState | None = None,
     ) -> None:
-        data = payload.to_json_bytes()
+        # Only the legacy wire adapter translates historical policy reason names.
+        wire_payload = payload
+        if payload.kind == "control" and payload.data.get("cmd") == "screen":
+            reason = {"lock": "mac_locked", "unlock": "mac_unlocked",
+                      "connection_restored": "ble_restored"}.get(payload.data.get("why"))
+            if reason:
+                wire_payload = Payload(payload.kind, {**payload.data, "why": reason})
+        data = wire_payload.to_json_bytes()
         log.debug(
             "BLE write %s: %s",
             payload.kind,
@@ -535,7 +542,7 @@ class BleTransport:
         client: Any,
         payload: Payload,
         ack_tracker: BleAckTracker,
-        state: BleState,
+        state: DeliveryState,
     ) -> None:
         if payload.kind == "alert":
             state.pending_alert = payload
@@ -558,11 +565,11 @@ class BleTransport:
             ) from exc
 
     @staticmethod
-    def _remember_payload(payload: Payload, state: BleState) -> None:
+    def _remember_payload(payload: Payload, state: DeliveryState) -> None:
         return remember_accepted(payload, state)
 
     @staticmethod
-    def remember_desired(payload: Payload, state: BleState) -> None:
+    def remember_desired(payload: Payload, state: DeliveryState) -> None:
         return remember_desired(payload, state)
 
     @staticmethod
@@ -574,7 +581,7 @@ class BleTransport:
         if not isinstance(data, dict) or data.get("ack") is not True:
             raise BleAckError(f"BLE NACK for {payload.kind}: {text}")
 
-    def _should_write_payload(self, payload: Payload, state: BleState) -> bool:
+    def _should_write_payload(self, payload: Payload, state: DeliveryState) -> bool:
         return should_send(payload, state)
 
     def _on_ack(

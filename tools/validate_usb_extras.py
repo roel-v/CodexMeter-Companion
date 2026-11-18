@@ -50,11 +50,11 @@ def run(args):
   deadline=time.monotonic()+90;restored=None
   while time.monotonic()<deadline:
    try:
-    restored=f.event({'type':'ping'},original=True);rows=restored['ble']['devices']
+    restored=f.event({'type':'ping'},original=True);rows=restored['devices']['devices']
     if len(rows)>=2 and all(d['connected'] and d.get('last_ack_age_sec') is not None and d['last_ack_age_sec']<10 for d in rows):break
    except (OSError,ValueError):pass
    time.sleep(1)
-  f.record('original_restored',restored is not None and all(d['connected'] for d in restored['ble']['devices']),status=restored)
+  f.record('original_restored',restored is not None and all(d['connected'] for d in restored['devices']['devices']),status=restored)
   if restore_error:f.record('settings_restore_error',False,error=restore_error)
 if __name__=='__main__':
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('binary',type=Path);p.add_argument('output',type=Path);p.add_argument('home',type=Path);p.add_argument('--original',type=Path,required=True);run(p.parse_args())

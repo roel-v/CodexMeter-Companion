@@ -18,7 +18,7 @@ async def acquire(port, device_id=None):
         status = await send_event({'type': 'ping'})
     except OSError:
         status = None
-    rows = status.get('devices', status.get('ble', {})).get('devices', []) if status else []
+    rows = status.get('devices', {}).get('devices', []) if status else []
     matches = [d for d in rows if d.get('last_discovered_address') == port and d.get('last_discovery_source') == 'usb']
     raw, legacy = None, False
     if len(matches) == 1:

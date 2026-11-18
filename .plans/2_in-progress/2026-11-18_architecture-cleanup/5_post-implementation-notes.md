@@ -55,3 +55,15 @@ include actual boot/revision preconditions and lifecycle fields. Policy callback
 Validation: 59 focused transport tests passed. Full suite: 379 passed, one Windows launcher
 lifetime fixture missed its marker; isolated rerun plus coordinator tests: 29 passed. The launcher
 code is unchanged; retain this intermittent test observation for final verification.
+
+## Phase 5 — Logical devices and shared policy
+
+Moved DeviceManager/DeviceSlot into neutral modules and BLE discovery/worker into backend modules.
+Removed the old facade and migrated production/tests/tools. DeliveryState and devices status are
+canonical; the duplicate ble status projection is removed. One policy instance now owns both periodic
+lock observations and reconnect reconciliation, including broadcasting transitions to other displays.
+Historical reason strings are translated only at the legacy BLE wire boundary. Discovery pause/resume
+and session delivery exclusivity have explicit APIs. Removed the unused alternate discovery loop and
+initial-worker path; recovery tests now drive the production manager loop.
+Validation: 81 initial boundary tests passed; extended affected tests 109 passed plus one outdated
+fixture, corrected; final focused recovery/coordinator checks 36 passed.

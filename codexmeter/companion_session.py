@@ -208,6 +208,12 @@ class CompanionSession:
             if self.channel:
                 await self.channel.close()
 
+    @contextlib.asynccontextmanager
+    async def exclusive_delivery(self):
+        """Fence new DATA writes while a caller quiesces and closes this session."""
+        async with self._send_lock:
+            yield
+
     async def maintenance(self):
         reply = await self._control("maint", host=self.host_id, token=self.token)
         if not reply["ok"]:

@@ -381,12 +381,29 @@ class UsbDiscovery:
         return (candidate.port in self.paused_ports or candidate.instance_id in self.paused_instances
                 or bool(known and known.identity.device_id in self.paused_ids))
 
-    async def pause(self, port, device_id, instance_id=None):
+    def instance_for_port(self, port):
+        return next((instance for candidate_port, instance in self._last_candidates
+                     if candidate_port == port), None)
+
+    def restore_pause(self, port, device_id, instance_id=None):
         self.paused_ids.add(device_id)
         if port:
             self.paused_ports.add(port)
         if instance_id:
             self.paused_instances.add(instance_id)
+
+    def resume(self, port, device_id, instance_id=None):
+        self.paused_ids.discard(device_id)
+        self.paused_ports.discard(port)
+        self.paused_instances.discard(instance_id)
+        self.invalidate(port)
+
+    def invalidate(self, port):
+        self.devices.pop(port, None)
+        self.stability.pop(port, None)
+
+    async def pause(self, port, device_id, instance_id=None):
+        self.restore_pause(port, device_id, instance_id)
         tasks = [task for key, task in self._probe_tasks.items() if key == port]
         for task in tasks:
             task.cancel()

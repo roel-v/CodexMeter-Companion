@@ -1,4 +1,4 @@
-"""Automatic screen on/off policy driven by macOS lock state."""
+"""Automatic screen on/off policy driven by host lock state."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from .ble import BleState
+from .delivery import DeliveryState
 from .payloads import Payload, build_screen_control_payload
 from .settings import AUTO_SCREEN_TIMEOUT_SEC, LOCK_POLL_INTERVAL_SEC
 
@@ -49,7 +49,7 @@ class LockScreenPolicy:
             else:
                 payloads.append(
                     build_screen_control_payload(
-                        True, reason="mac_unlocked", now=epoch_now
+                        True, reason="unlock", now=epoch_now
                     )
                 )
         elif self.locked != locked:
@@ -61,7 +61,7 @@ class LockScreenPolicy:
                 self.locked_since = None
                 payloads.append(
                     build_screen_control_payload(
-                        True, reason="mac_unlocked", now=epoch_now
+                        True, reason="unlock", now=epoch_now
                     )
                 )
 
@@ -69,7 +69,7 @@ class LockScreenPolicy:
             if now - self.locked_since >= self.timeout_sec:
                 payloads.append(
                     build_screen_control_payload(
-                        False, reason="mac_locked", now=epoch_now
+                        False, reason="lock", now=epoch_now
                     )
                 )
                 self.lock_off_sent = True
@@ -77,7 +77,7 @@ class LockScreenPolicy:
         connect_control = None
         if not locked:
             connect_control = build_screen_control_payload(
-                True, reason="ble_restored", now=epoch_now
+                True, reason="connection_restored", now=epoch_now
             )
 
         return ScreenPolicyResult(tuple(payloads), connect_control)
@@ -152,25 +152,23 @@ def parse_ioreg_lock_state(text: str) -> bool | None:
 
 async def screen_policy_loop(
     sink: PayloadSink,
-    ble_state: BleState | None,
+    ble_state: DeliveryState | None,
     stop_event: asyncio.Event,
     *,
     timeout_sec: float = AUTO_SCREEN_TIMEOUT_SEC,
     poll_interval_sec: float = LOCK_POLL_INTERVAL_SEC,
     detector: MacLockDetector | WindowsLockDetector | None = None,
     connect_control_setter: Callable[[Payload | None], None] | None = None,
-    observation_observer=None,
+    policy: LockScreenPolicy | None = None,
 ) -> None:
     detector = detector or (WindowsLockDetector() if sys.platform == "win32" else MacLockDetector())
-    policy = LockScreenPolicy(timeout_sec=timeout_sec)
+    policy = policy or LockScreenPolicy(timeout_sec=timeout_sec)
 
     while not stop_event.is_set():
         locked = await detector.is_locked()
         if locked is None:
             log.debug("Host lock state unavailable; keeping previous screen policy")
         else:
-            if observation_observer:
-                observation_observer(locked, time.monotonic())
             result = policy.observe(
                 locked,
                 now=time.monotonic(),

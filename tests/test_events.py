@@ -644,7 +644,7 @@ def test_ping_includes_optional_status_provider_fields():
         async def sink(_payload):
             raise AssertionError("ping should not queue payloads")
 
-        server = EventServer(sink, status_provider=lambda: {"ble": {"connected": True}})
+        server = EventServer(sink, status_provider=lambda: {"devices": {"connected": True}})
         result = await server._dispatch({"type": "ping"})
 
         assert result == {
@@ -658,7 +658,7 @@ def test_ping_includes_optional_status_provider_fields():
                 "oldest_age_sec": None,
                 "next_expiry_sec": None,
             },
-            "ble": {"connected": True},
+            "devices": {"connected": True},
         }
 
     asyncio.run(scenario())

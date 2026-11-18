@@ -290,7 +290,7 @@ def test_usb_worker_with_every_bluetooth_import_unavailable(monkeypatch):
 
     async def run():
         from codexmeter.device_registry import DeviceConfig
-        from codexmeter.multi_ble import DeviceManager
+        from codexmeter.device_manager import DeviceManager
 
         channels = []
 
@@ -457,7 +457,7 @@ def test_upgrade_required_retains_basic_identity_never_claims():
             "codexmeter-ffffffffffff",
         }
         assert all(c.writes == [b"identity\n"] for c in channels)
-        from codexmeter.multi_ble import DeviceManager
+        from codexmeter.device_manager import DeviceManager
         from codexmeter.device_registry import DeviceConfig
 
         m = DeviceManager(
@@ -478,7 +478,7 @@ def test_upgrade_required_retains_basic_identity_never_claims():
 
 def test_initial_auto_retries_usb_after_first_identity_timeout(monkeypatch):
     async def run():
-        from codexmeter.multi_ble import DeviceManager
+        from codexmeter.device_manager import DeviceManager
         from codexmeter.device_registry import DeviceConfig
         import codexmeter.usb_worker as module
 
@@ -544,7 +544,7 @@ def test_initial_auto_retries_usb_after_first_identity_timeout(monkeypatch):
 def test_four_device_workers_one_unanswered_ack_does_not_block_peers(monkeypatch):
     async def run():
         from dataclasses import replace
-        from codexmeter.multi_ble import DeviceManager
+        from codexmeter.device_manager import DeviceManager
         from codexmeter.device_registry import DeviceConfig
         import codexmeter.usb_worker as module
 

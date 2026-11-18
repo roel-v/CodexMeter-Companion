@@ -1,7 +1,8 @@
 import asyncio
 
 from codexmeter.device_identity import DeviceIdentity, DeviceIdentityError
-from codexmeter.ble import BleAckError, BleAckTimeout, BleAckTracker, BleConnectTimeout, BleNotifyError, BleState, BleTransport, BleWriteTimeout
+from codexmeter.delivery import DeliveryState
+from codexmeter.ble import BleAckError, BleAckTimeout, BleAckTracker, BleConnectTimeout, BleNotifyError, BleTransport, BleWriteTimeout
 from codexmeter.payloads import (
     build_activity_payload,
     build_alert_payload,
@@ -70,7 +71,7 @@ def test_ble_connect_timeout_disconnects_partial_client():
             connect_timeout_sec=0.01,
             disconnect_timeout_sec=0.1,
         )
-        state = BleState()
+        state = DeliveryState()
 
         try:
             await transport.connect_and_write(
@@ -101,7 +102,7 @@ def test_ble_disconnect_timeout_bounds_cleanup():
 
 
 def test_ble_skips_stale_screen_on_when_connect_wake_is_disabled():
-    state = BleState(connect_control=None)
+    state = DeliveryState(connect_control=None)
     transport = BleTransport()
     payload = build_screen_control_payload(True, "mac_unlocked", now=1)
 
@@ -109,7 +110,7 @@ def test_ble_skips_stale_screen_on_when_connect_wake_is_disabled():
 
 
 def test_ble_allows_screen_off_when_connect_wake_is_disabled():
-    state = BleState(connect_control=None)
+    state = DeliveryState(connect_control=None)
     transport = BleTransport()
     payload = build_screen_control_payload(False, "mac_locked", now=1)
 
@@ -206,7 +207,7 @@ def test_ble_write_payload_rejects_device_nack_without_clearing_failure_state():
         transport = BleTransport(write_timeout_sec=0.1, ack_timeout_sec=0.1)
         client = FakeWriteClient()
         tracker = BleAckTracker()
-        state = BleState(consecutive_failures=2, last_error="previous")
+        state = DeliveryState(consecutive_failures=2, last_error="previous")
         payload = build_activity_payload(1, now=1)
 
         async def notify_nack() -> None:
@@ -253,7 +254,7 @@ def test_ble_write_payload_rejects_invalid_ack_json():
 
 
 def test_ble_state_status_reports_health_ages():
-    state = BleState(
+    state = DeliveryState(
         connected=True,
         last_discovered_at=9.0,
         last_discovery_source="connected",
@@ -313,7 +314,7 @@ def test_ble_identity_rejects_device_id_short_id_mismatch():
 def test_ble_failed_alert_remains_pending_until_ack():
     async def run() -> None:
         transport = BleTransport(write_timeout_sec=0.01, ack_timeout_sec=0.01)
-        state = BleState()
+        state = DeliveryState()
         payload = build_alert_payload("reliable", event_id="alert-1", now=1)
 
         try:
@@ -330,7 +331,7 @@ def test_ble_failed_alert_remains_pending_until_ack():
 
 
 def test_ble_remembers_latest_desired_state_before_ack():
-    state = BleState()
+    state = DeliveryState()
     payload = build_activity_payload(3, now=1)
 
     BleTransport.remember_desired(payload, state)

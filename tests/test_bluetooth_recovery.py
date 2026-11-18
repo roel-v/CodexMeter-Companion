@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from codexmeter.bluetooth_recovery import BluetoothRecovery, cycle_windows_radio
-from codexmeter.multi_ble import scan_codexmeter_devices
+from codexmeter.ble_discovery import scan_codexmeter_devices
 
 
 def make_monitor(tmp_path):
@@ -124,8 +124,8 @@ def test_raw_scan_count_includes_unrelated_devices():
     asyncio.run(run())
 
 
-def test_discovery_loop_feeds_monitor_and_clears_failed_scan_evidence(tmp_path):
-    from codexmeter.multi_ble import DiscoveryService
+def test_discovery_loop_feeds_monitor_and_clears_failed_scan_evidence(tmp_path, monkeypatch):
+    from codexmeter.ble_discovery import DiscoveryService
     async def run():
         monitor, _, now, calls = make_monitor(tmp_path)
         stop = asyncio.Event()
@@ -144,6 +144,14 @@ def test_discovery_loop_feeds_monitor_and_clears_failed_scan_evidence(tmp_path):
                 assert not calls  # Error at scan 3 restarted the two-minute window.
             if scans == 6: stop.set()
         discovery.after_scan = after_scan
-        await discovery.run(stop)
+        from tests.test_device_coordinator import manager, ID
+        from codexmeter.device_registry import DeviceConfig
+        async def available(): return True, None
+        async def no_wait(*args): await asyncio.sleep(0)
+        monkeypatch.setattr("codexmeter.usb_transport.bluetooth_availability", available)
+        monkeypatch.setattr("codexmeter.device_manager._sleep_or_stop", no_wait)
+        service = manager([DeviceConfig(ID)])
+        service.discovery = discovery
+        await service._ble_discovery(stop)
         assert len(calls) == 1
     asyncio.run(run())

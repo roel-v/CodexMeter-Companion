@@ -25,7 +25,7 @@ def validate(binary: Path, port_name: str, output: Path):
     deadline = time.monotonic() + 75
     while time.monotonic() < deadline:
         status = cli("status")
-        devices = status["ble"]["devices"]
+        devices = status["devices"]["devices"]
         if any(d["connected"] and d["last_ack_age_sec"] is not None for d in devices):
             results["connected_status"] = status
             break

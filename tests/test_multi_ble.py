@@ -5,14 +5,10 @@ from types import SimpleNamespace
 from codexmeter.device_identity import DeviceIdentity, DeviceIdentityError
 from codexmeter.ble import BleTransport
 from codexmeter.device_registry import DeviceConfig, config_from_short_id
-from codexmeter.multi_ble import (
-    DeviceManager,
-    DeviceSlot,
-    DeviceWorker,
-    DiscoveredDevice,
-    DiscoveryService,
-    scan_codexmeter_devices,
-)
+from codexmeter.device_manager import DeviceManager
+from codexmeter.device_slot import DeviceSlot
+from codexmeter.ble_worker import DeviceWorker
+from codexmeter.ble_discovery import DiscoveredDevice, DiscoveryService, scan_codexmeter_devices
 from codexmeter.payloads import Payload, build_activity_payload, build_screen_control_payload
 from codexmeter.queueing import put_latest
 

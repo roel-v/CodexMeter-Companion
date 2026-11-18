@@ -40,7 +40,7 @@ class Fixture:
         return asyncio.run(send(event,path))
     def status(self):return self.event({'type':'ping'})
     def devices(self):
-        s=self.status();return s.get('devices',s.get('ble',{})).get('devices',[])
+        s=self.status();return s.get('devices',{}).get('devices',[])
     def wait(self,wanted,timeout=65):
         start=time.monotonic();last=[]
         self.event({'type':'activity','count':2})
@@ -165,12 +165,12 @@ with MaintenanceGuard(sys.argv[2],sys.argv[3]), SerialSession(sys.argv[2]) as po
             while time.monotonic()<deadline:
                 try:
                     restored=self.event({'type':'ping'},original=True)
-                    ds=restored.get('ble',{}).get('devices',[])
+                    ds=restored.get('devices',{}).get('devices',[])
                     if len(ds)>=2 and all(x.get('connected') and x.get('last_ack_age_sec') is not None for x in ds):break
                 except (OSError,ValueError):pass
                 time.sleep(2)
             if restore_error:self.record('restore_settings_error',False,error=restore_error)
-            self.record('original_restored',bool(restored and len(restored.get('ble',{}).get('devices',[]))>=2 and all(x.get('connected') for x in restored['ble']['devices'])),status=restored)
+            self.record('original_restored',bool(restored and len(restored.get('devices',{}).get('devices',[]))>=2 and all(x.get('connected') for x in restored['devices']['devices'])),status=restored)
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('binary',type=Path);p.add_argument('output',type=Path);p.add_argument('home',type=Path);p.add_argument('--original',type=Path,required=True)
     Fixture(p.parse_args()).run()

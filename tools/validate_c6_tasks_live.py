@@ -20,7 +20,7 @@ def validate(binary, port_name, output):
             timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
         assert process.returncode == 0, process.stderr
         status = json.loads(process.stdout)
-        if (status["chat_activity"]["available"] and status["ble"]["connected"]
+        if (status["chat_activity"]["available"] and status["devices"]["connected"]
                 and status["tray"]["state"] == "green"):
             result["status"] = status
             break

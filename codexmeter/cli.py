@@ -18,7 +18,7 @@ from .device_registry import (
     normalize_short_id,
 )
 from .events import send_event
-from .multi_ble import scan_codexmeter_devices
+from .ble_discovery import scan_codexmeter_devices
 from .payloads import build_usage_payload
 from .provider import CodexUsageProvider
 

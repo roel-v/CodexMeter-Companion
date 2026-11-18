@@ -386,7 +386,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
                 device["metric_validity_note"] = (
                     "Update display firmware for correct unknown/partial task counts. Older Ball firmware may show zero.")
         # Compatibility projection: old IPC/tray clients still read ble.
-        status = {"devices": snapshot, "ble": snapshot, "compatibility": monitor.snapshot()}
+        status = {"devices": snapshot, "compatibility": monitor.snapshot()}
         if recovery is not None:
             status["bluetooth_recovery"] = recovery.status()
         if chats is not None:
@@ -456,7 +456,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
                 timeout_sec=args.auto_screen_timeout,
                 poll_interval_sec=args.lock_poll_interval,
                 connect_control_setter=manager.set_connect_control,
-                observation_observer=manager.observe_lock,
+                policy=manager.policy,
             ),
             "devices": manager.run(stop_event),
         },

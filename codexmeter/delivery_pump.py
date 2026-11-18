@@ -30,13 +30,8 @@ class DeliveryPump:
         data = payload.data
         if payload.kind == "control" and data.get("cmd") == "screen":
             why = data.get("why")
-            if why == "ble_restored":
+            if why == "connection_restored":
                 return
-            if why in ("mac_locked", "mac_unlocked"):
-                payload = Payload(
-                    payload.kind,
-                    {**data, "why": "lock" if why == "mac_locked" else "unlock"},
-                )
         state.last_write_at = time.monotonic()
         result = await self.session.send(
             payload,
