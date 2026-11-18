@@ -6,6 +6,7 @@ import asyncio
 import datetime as dt
 import logging
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 
 from .app_server import JsonRpcClient
 from .limits import (
@@ -36,6 +37,8 @@ class CodexUsageProvider:
         compare=False,
         repr=False,
     )
+
+    report_path: Path | None = field(default=None, compare=False, repr=False)
 
     async def fetch(self) -> UsageSnapshot:
         from .compatibility import report_error, SupersededObservation
@@ -78,11 +81,10 @@ class CodexUsageProvider:
                 LOGGER.warning("Quota unavailable (%s)", type(exc).__name__)
                 return None
 
-        async def local():
+        async def collect_local(now):
             if self.local_usage_reader is None:
                 return None
             try:
-                now = dt.datetime.now().astimezone()
                 daily = await asyncio.to_thread(self.local_usage_reader.read_daily_tokens, now)
                 check()
                 if daily is None:
@@ -93,11 +95,9 @@ class CodexUsageProvider:
                 self._log_local_usage_change(daily)
                 if hasattr(self.local_usage_reader, "read_breakdown"):
                     try:
-                        from .pricing import PricingStore, PRICING_DIR
-                        from .persistence import atomic_write_json
+                        from .pricing import PricingStore
                         details = await asyncio.to_thread(self.local_usage_reader.read_breakdown, daily, PricingStore())
                         check()
-                        await asyncio.to_thread(atomic_write_json, PRICING_DIR / "usage-report.json", details)
                     except SupersededObservation:
                         raise
                     except Exception:
@@ -115,6 +115,19 @@ class CodexUsageProvider:
                 report_error(monitor, "tokens", exc)
                 LOGGER.warning("Local token activity unavailable (%s)", type(exc).__name__)
                 return None
+
+        async def local():
+            now = dt.datetime.now().astimezone()
+            result = await collect_local(now)
+            check()
+            if self.report_path is not None:
+                from .usage_report import publish_report
+                try:
+                    await asyncio.to_thread(publish_report, self.report_path,
+                                            result[2] if result else None, now)
+                except OSError:
+                    LOGGER.warning("Could not save token report; previous report will age out")
+            return result
 
         snapshot, usage = await asyncio.gather(quotas(), local())
         check()

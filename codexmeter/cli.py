@@ -24,7 +24,9 @@ from .provider import CodexUsageProvider
 
 
 async def run_once(args: argparse.Namespace) -> int:
-    provider = CodexUsageProvider(args.codex_bin, args.timeout, args.refresh_token)
+    from .pricing import PRICING_DIR
+    provider = CodexUsageProvider(codex_bin=args.codex_bin, timeout_sec=args.timeout,
+                                  refresh_token=args.refresh_token, report_path=PRICING_DIR / "usage-report.json")
     snapshot = await provider.fetch()
     payload = build_usage_payload(snapshot)
     print(json.dumps(payload.data, ensure_ascii=False, indent=2))

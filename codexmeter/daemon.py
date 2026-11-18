@@ -308,7 +308,9 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
     from .compatibility import CompatibilityMonitor
     monitor = CompatibilityMonitor(APP_DIR / "compatibility-incidents.json",
         components=None if sys.platform == "win32" else ["quota", "tokens"])
+    from .pricing import PRICING_DIR
     provider = CodexUsageProvider(
+        report_path=PRICING_DIR / "usage-report.json",
         monitor=monitor,
         codex_bin=args.codex_bin,
         timeout_sec=args.timeout,

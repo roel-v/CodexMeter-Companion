@@ -228,17 +228,10 @@ class MeterApp:
             lines = []
             try:
                 report = json.loads((store.root / "usage-report.json").read_text(encoding="utf-8"))
-                for key, title in (("today", "Today"), ("week", "Last 7 days")):
-                    part = report[key]
-                    lines.append(f"{title} — recorded total {part['total_tokens']:,} tokens")
-                    for label, tokens, cost in zip(("Input (uncached)", "Cached input", "Output"), part["tokens"], part["cost_micro_usd"]):
-                        lines.append(f"  {label:18} {tokens:>15,}   ${cost / 1e6:,.4f}")
-                    lines.append(f"  Unpriced tokens: {part['unpriced_tokens']:,}; breakdown unavailable: {part['unknown_tokens']:,}")
-                    for model, item in sorted(part["models"].items()):
-                        lines.append(f"  {model}: {item['tokens']:,} tokens; priced subtotal ${item['cost_usd']:,.4f}; unpriced {item['unpriced_tokens']:,}  {'; '.join(item['reasons'])}")
-                    lines.append("")
-            except (OSError, ValueError, KeyError):
-                lines.append("No token report yet. Start the bridge or use Read usage.")
+                from .usage_report import report_lines
+                lines.extend(report_lines(report))
+            except (OSError, ValueError, KeyError, TypeError):
+                lines.append("No valid token report yet. Start the bridge or use Read usage.")
             lines.append("Pricing history (effective UTC; new revisions do not change prior dates):")
             for revision in store.revisions():
                 lines.append(f"  {revision['effective_from']} — {len(revision['prices'])} models; source {revision['source_sha256'][:12]}")
