@@ -182,6 +182,7 @@ static void kick_usb_tx() {
 
 #ifndef BOARD_HAS_PSRAM
 static bool capture_tiles = false;
+#endif
 static bool capture_write(const uint8_t* data, size_t size) {
   uint32_t progress = millis();
   while (size) {
@@ -206,7 +207,6 @@ static bool capture_write(const uint8_t* data, size_t size) {
 static bool capture_text(const char* text) {
   return capture_write(reinterpret_cast<const uint8_t*>(text), strlen(text));
 }
-#endif
 
 static void lv_flush(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
   if (!screen_on) {
@@ -609,25 +609,18 @@ static void send_screenshot() {
     return;
   }
 
-  Serial.printf(
-      "SCREENSHOT_START %lu %lu %lu\n", (unsigned long)w, (unsigned long)h,
-      (unsigned long)buf_size);
-  Serial.flush();
   const uint16_t* frame =
       display_rotation_frame((const uint16_t*)sbuf, orientation_rotation_quadrant());
   const uint8_t* frame_bytes = (const uint8_t*)frame;
-  uint32_t written = 0;
-  while (written < buf_size) {
-    uint32_t remaining = buf_size - written;
-    uint32_t chunk = remaining > 4096UL ? 4096UL : remaining;
-    Serial.write(frame_bytes + written, chunk);
-    written += chunk;
-    feed_watchdog();
-    delay(0);
-  }
-  Serial.flush();
-  Serial.println();
-  Serial.println("SCREENSHOT_END");
+  char header[96];
+  snprintf(header, sizeof(header), "SCREENSHOT_START %lu %lu %lu %lu\n",
+      (unsigned long)w, (unsigned long)h, (unsigned long)buf_size,
+      (unsigned long)esp_rom_crc32_le(0, frame_bytes, buf_size));
+  device_log_serial_enabled(false);
+  // Respect the USB driver's capacity and actual write count on every board.
+  const bool sent = capture_text(header) && capture_write(frame_bytes, buf_size);
+  capture_text(sent ? "\nSCREENSHOT_END\n" : "\nSCREENSHOT_FAILED\n");
+  device_log_serial_enabled(true);
   heap_caps_free(sbuf);
   device_logf("INFO", "screenshot sent %lux%lu", (unsigned long)w, (unsigned long)h);
 #endif

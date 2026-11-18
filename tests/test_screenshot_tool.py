@@ -61,3 +61,24 @@ def test_wait_for_end_accepts_missing_optional_usb_status_line():
             raise capture_screenshot.SerialToolError("timed out waiting for serial data")
 
     capture_screenshot._wait_for_end(TimeoutSerial(), 0.01)
+
+import pytest
+from contextlib import nullcontext
+from types import SimpleNamespace
+import zlib
+
+@pytest.mark.parametrize('checksum', [None, 'correct', 'wrong'])
+def test_full_frame_capture_checksum_and_legacy_header(monkeypatch, checksum):
+    data=b'\x00\xf8\xe0\x07'
+    header=b'SCREENSHOT_START 2 1 4'
+    if checksum is not None:
+        header+=b' '+str(zlib.crc32(data)+(checksum=='wrong')).encode()
+    lines=iter([header,b'SCREENSHOT_END'])
+    serial=SimpleNamespace(write_line=lambda _:None,read_line=lambda _:next(lines),
+        read_exact=lambda size,timeout:data)
+    monkeypatch.setattr(capture_screenshot,'SerialSession',lambda _:nullcontext(serial))
+    if checksum=='wrong':
+        with pytest.raises(capture_screenshot.CaptureError,match='CRC mismatch'):
+            capture_screenshot.capture_rgb565le('fake')
+    else:
+        assert capture_screenshot.capture_rgb565le('fake')==(2,1,data)

@@ -52,15 +52,18 @@ def capture_rgb565le(
                 continue
 
             parts = text.split()
-            if len(parts) != 4:
+            if len(parts) not in (4, 5):
                 raise CaptureError(f"invalid screenshot header: {text}")
             width, height, raw_size = (int(parts[1]), int(parts[2]), int(parts[3]))
+            crc = int(parts[4]) if len(parts) == 5 else None
             expected_size = width * height * 2
             if raw_size != expected_size:
                 raise CaptureError(
                     f"invalid raw size {raw_size}; expected {expected_size} for {width}x{height}"
                 )
             data = serial.read_exact(raw_size, raw_timeout)
+            if crc is not None and zlib.crc32(data) != crc:
+                raise CaptureError("Serial image CRC mismatch")
             _wait_for_end(serial, line_timeout)
             return width, height, data
 
