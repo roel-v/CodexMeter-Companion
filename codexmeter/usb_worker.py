@@ -22,7 +22,7 @@ class UsbDeviceWorker:
         self.host_id = host_id
         self.session_factory = session_factory
         self.identity_observer = identity_observer
-        self.session = None
+        self.session: UsbSession | None = None
         self.on_reconciled = None
 
     async def run(self, stop):

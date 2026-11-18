@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 from .payloads import Payload
 from .companion_protocol import NegotiatedIdentity
 
@@ -57,6 +57,16 @@ class MaintenanceSession(Protocol):
     async def try_maintenance(self) -> dict | None: ...
 
 
+@runtime_checkable
+class WorkerSession(MaintenanceSession, Protocol):
+    """Coordinator/manager surface; excludes wire framing and delivery methods."""
+    identity: NegotiatedIdentity
+    failure: Exception | None
+    async def read_state(self) -> dict: ...
+
+
+@runtime_checkable
 class ConnectionWorker(Protocol):
-    session: MaintenanceSession | None
+    @property
+    def session(self) -> WorkerSession | None: ...
     async def run(self, stop) -> None: ...

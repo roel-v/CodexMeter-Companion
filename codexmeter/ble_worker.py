@@ -16,6 +16,7 @@ IdentityObserver = Callable[[DeviceConfig, DeviceIdentity], DeviceConfig]
 
 
 from .device_slot import DeviceSlot
+from .transport_types import WorkerSession
 from .ble_discovery import DiscoveryService
 
 
@@ -33,7 +34,7 @@ class DeviceWorker:
         self.identity_observer = identity_observer
 
     @property
-    def session(self):
+    def session(self) -> WorkerSession | None:
         return self.transport.session
 
     async def run(self, stop_event: asyncio.Event) -> None:
