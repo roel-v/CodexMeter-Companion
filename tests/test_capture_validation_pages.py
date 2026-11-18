@@ -49,3 +49,18 @@ def test_ball_capture_waits_for_redraw_and_restores_after_failure(monkeypatch, t
     with pytest.raises(RuntimeError, match="capture failed"):
         pages.run(SimpleNamespace(port="test", device_id="expected", c6=False, output=tmp_path))
     assert events.count("test_swipe") == 3
+
+
+def test_c6_rejects_bad_crc_and_preserves_diagnostic_tile(monkeypatch, tmp_path):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "tools"))
+    import capture_c6_screen as c6
+
+    lines = iter([b"TILED_SCREENSHOT_START 480 480", b"TILE 0 0 1 1 2 0"])
+    serial = SimpleNamespace(write_line=lambda _: None,
+                             read_line=lambda _: next(lines),
+                             read_exact=lambda size, timeout: b"ab")
+    output = tmp_path / "rejected.png"
+    with pytest.raises(AssertionError, match="CRC mismatch"):
+        c6.capture(serial, output)
+    assert not output.exists()
+    assert output.with_suffix(".failed-tile.bin").read_bytes() == b"ab"

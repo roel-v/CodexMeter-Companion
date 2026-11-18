@@ -33,7 +33,10 @@ def capture(port: SerialSession, output: Path) -> None:
         assert 0 <= x < width and 0 <= y < height and x + w <= width and y + h <= height
         assert size == w * h * 2
         tile = port.read_exact(size, max(0.1, deadline - time.monotonic()))
-        assert zlib.crc32(tile) == crc, "Serial image CRC mismatch"
+        if zlib.crc32(tile) != crc:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.with_suffix(".failed-tile.bin").write_bytes(tile)
+            raise AssertionError(f"Serial image CRC mismatch at {x},{y} {w}x{h}; diagnostic tile retained")
         for row in range(h):
             offset = (y + row) * width + x
             pixels[offset * 2:(offset + w) * 2] = tile[row * w * 2:(row + 1) * w * 2]
