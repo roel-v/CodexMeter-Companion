@@ -28,10 +28,19 @@ def run(args):
 
         else:
             from capture_screenshot import capture_rgb565le,rgb565le_to_png
-            for page in range(3):
-                commands=[] if page==0 else ['test_swipe']
-                width,height,data=capture_rgb565le(args.port,pre_commands=commands)
-                (args.output/f'page-{page}.png').write_bytes(rgb565le_to_png(width,height,data))
-            with SerialSession(args.port) as serial:serial.write_line('test_swipe');time.sleep(.3)
+            advances = 0
+            try:
+                for page in range(3):
+                    if page:
+                        with SerialSession(args.port) as serial:
+                            serial.write_line('test_swipe')
+                        advances += 1
+                        time.sleep(.5)  # Allow the framebuffer redraw before reading it.
+                    width,height,data=capture_rgb565le(args.port)
+                    (args.output/f'page-{page}.png').write_bytes(rgb565le_to_png(width,height,data))
+            finally:
+                with SerialSession(args.port) as serial:
+                    for _ in range((-advances) % 3):
+                        serial.write_line('test_swipe');time.sleep(.5)
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('port');p.add_argument('output',type=Path);p.add_argument('--c6',action='store_true');p.add_argument('--device-id');run(p.parse_args())
