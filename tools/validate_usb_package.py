@@ -82,7 +82,12 @@ class Fixture:
         self.record(f'capture_file_{label}_{index}',p.returncode==0,content_validation='requires independent pixel inspection',stdout=p.stdout,stderr=p.stderr,path=str(output))
     def restore_settings(self):
         if not self.baseline:return
+        for index in range(len(self.baseline)):
+            self.mode(index, 'auto')
         for index,row in enumerate(self.baseline):
+            # A capture release may still be reconnecting; do not acquire the
+            # worker's closing session merely because it has a cached handle.
+            self.wait({IDS[index]: 'usb'})
             state=row['device_state']
             code="""import sys,time; from pathlib import Path; sys.path.insert(0,sys.argv[1]); from maintenance import MaintenanceGuard; from serial_device import SerialSession
 with MaintenanceGuard(sys.argv[2],sys.argv[3]), SerialSession(sys.argv[2]) as port:
