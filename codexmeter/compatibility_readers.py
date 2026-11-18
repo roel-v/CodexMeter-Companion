@@ -14,9 +14,10 @@ def schema(db, tables, field):
             raise ContractError("schema", field, definitive=True)
 
 def open_database(path):
+    from contextlib import closing
     if not path.is_file():
         raise FileNotFoundError()
-    return sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=1)
+    return closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=1))
 
 def read_roots(home):
     with open_database(home / "state_5.sqlite") as db:
