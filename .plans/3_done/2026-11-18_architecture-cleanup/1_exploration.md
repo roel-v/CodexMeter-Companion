@@ -3,8 +3,9 @@
 ## Status, ownership and scope
 
 Requested 18 November 2026. Plan for addressing every finding in docs/code-audit-2026-11-18.md.
-This turn prepares the plan only. The primary assistant will implement the phases itself, sequentially;
-no delegation, subagents or model substitution. Implementation, deployment and publication are separate actions.
+Implementation authorized after the plan: begin with grouped baseline commits, then implement and commit each fix.
+All eight phases are complete, implemented by the primary assistant without delegation.
+See 5_post-implementation-notes.md for acceptance evidence and limits. Publication is not requested.
 
 Work against the existing CodexMeter-Companion checkout, including the uncommitted USB and compatibility changes.
 Do not reset, discard, sweep into unrelated commits, or replace that baseline with the last published release.

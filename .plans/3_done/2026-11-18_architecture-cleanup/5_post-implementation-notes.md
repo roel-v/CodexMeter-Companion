@@ -175,3 +175,111 @@ are unchanged. All three production targets compiled; native protocol/view tests
 were flashed with full identity and rollback-hash verification, and three complete C6 live-page captures passed.
 The first Ball flash attempt refused to write when identity was unavailable; an explicit identity recheck and Resume
 preceded the successful retry. No identity check was bypassed. Final repeated transport captures follow below.
+
+
+## Final acceptance and local delivery — 18 November 2026
+
+All eight phases are complete. All eleven audit findings have a disposition in
+[the audit](../../../docs/code-audit-2026-11-18.md); [code structure](../../../docs/architecture.md)
+documents the resulting boundaries. The original Chinese architecture notes are retained separately.
+
+- Final Python regression suite: **395 passed in 25.30 seconds**. Native firmware protocol/view-model tests passed;
+  the existing MSVC time_t-to-long warning remains in the host harness.
+- All three production firmware targets built successfully. No release numbering change: 3.12.3.4 remains unreleased.
+- Final Nuitka onefile self-test passed in an isolated D: profile with no Python on PATH: compiled entrypoint,
+  child command, Tk, external-panel worker/offline/recovery/details, native tray interactions, pricing/update/device
+  panels, WinRT and DPAPI. The exact installed final executable also passed repeated-launch/single-panel/close-to-tray.
+- Both final application images were flashed with identity checks and verified writes. Full-flash recovery backups
+  were checked first. No bootloader, partition table or NVS overwrite was requested.
+- Installed the final executable at the existing dist/windows/CodexMeter.exe startup path. Its SHA-256 matches the
+  tested candidate. Both displays reconnected over USB in auto mode, with no maintenance pauses. C6 brightness 70,
+  auto-rotation enabled; Ball brightness 60, manual rotation 0; both overview pages and manual screen-on restored.
+  The final live observer reported available data (2 running, 1 waiting, 7 completed unread chats at capture).
+
+| Target | Static RAM bytes | Flash bytes |
+| --- | ---: | ---: |
+| Original Waveshare S3 | 127288 | 1641259 |
+| Waveshare C6 | 54604 | 2413742 |
+| Spotpear Ball V2 | 190784 | 1212126 |
+
+C6/Ball static RAM is unchanged from the recorded baseline. C6 flash grew 448 bytes; Ball flash fell 2024 bytes.
+Active builds, caches and scratch stayed on D: (about 99 GB free before the final builds); no unrelated storage was moved.
+Retained artifacts/logs stayed under ignored E: dist/windows/validation/architecture-20261118. Full recovery images
+remain in E:/DeviceBackups. The validation rollback subfolder preserves the original installed app and app partitions.
+
+### Hardware evidence and rejected runs
+
+The final firmware matrix in hardware-complete-final captured **42 complete screenshots without CRC failure**.
+It exercised both models over USB and Bluetooth, equal identities/capabilities, known/unknown/partial task counts,
+totals without breakdown, partial costs, all pages, mixed transports, forced/auto modes, applied brightness/rotation,
+manual-off preservation across handover, completion notifications, waiting views, daemon restart and recovery.
+
+Capture transfer success is not visual acceptance. Images were inspected independently. The isolated profile's real
+chat observer can report unavailable between injected synthetic samples. Consequently, use hardware-complete-final's
+usb-partial-0.png for C6 and hardware-partial-final's usb-partial-1.png for Ball as the accepted USB partial-count
+images; the other attempt on each board showed the observer's unknown state. Both Bluetooth partial-count images in
+hardware-complete-final show the intended partial values. Settled Ball Today/seven-day captures verify distinct totals;
+earlier immediate-after-swipe captures were rejected because they caught an incomplete redraw.
+
+The full matrix's final Ball settings-restoration request was refused against a reconnecting session. The fixture was
+corrected to wait for a freshly acknowledged USB session; explicit restoration and subsequent hardware-partial-final
+readbacks passed. installed-final.json and live-final-c6.png/live-final-ball.png confirm the final real-data state.
+Earlier failed runs, including rejected CRC transfers, remain retained; they are not counted as passes. The retained
+bad tile established dropped bytes, and the bounded writer then passed the complete 42-image matrix plus live captures.
+
+Key retained evidence: final-artifacts.json; complete-packaged-selftest.json; installed-final.json;
+installed-tray-final/tray-live.json; architecture-complete-regression.log; architecture-final-native.log;
+architecture-capture-firmware-verified.log; flash-capture-C6.log; flash-capture-Ball-retry.log;
+hardware-complete-final/package-results.json; hardware-partial-final/package-results.json.
+The final desktop rebuild after hardware acceptance only removed an unused dictionary lookup and stale comment;
+the exact rebuilt package passed self-test, installation/hash, live connection/settings and tray checks.
+
+### Limits and follow-up choices
+
+No physical PC sleep/reboot, overnight soak or separate no-Bluetooth-PC test was performed. Native power registration
+and simulated lifecycle/backend failures are covered; they do not substitute for those physical tests. Original S3
+was compiled, not flashed locally. More than two simultaneous displays was not tested. The user's separate-machine
+USB acceptance and the future MCP/keep-awake features remain separate, unfinished work. No automatic restart machinery,
+push or GitHub release was added/performed.
+
+Fix forward remains appropriate for a bounded new defect. Replan if the strategy proves inadequate; restart if its
+requirements or assumptions fail; supersede if the objective is replaced. None is currently needed to close this
+cleanup. This closes only the architecture-remediation work item.
+
+### Commit ledger (before this closeout)
+
+The first six commits establish the grouped clean baseline; subsequent commits implement and validate the fixes.
+
+- 7d94fc9 USB fallback phase 2: Add negotiated firmware ownership and metric validity
+- a6904e3 USB fallback phases 3-4: Add host transport coordination and maintenance
+- 86e103b Compatibility monitor phases 1-4: Integrate source health and desktop status
+- b61dc32 USB fallback phase 5: Add safe firmware and physical validation tools
+- 5dac706 Document USB fallback and compatibility baseline verification
+- 266e6b8 Plan architecture remediation and future companion features
+- 5a10498 Architecture cleanup phase 1: Fix standalone panel health polling
+- c90b1d5 Architecture cleanup phase 1: Share token and cost validity rules
+- 990c236 Architecture cleanup phase 2: Unify display identities across transports
+- 7a30b4b Architecture cleanup phase 3: Connect health monitoring to power events
+- 5246020 Architecture cleanup phase 3: Require fresh empty-inventory evidence
+- b163ce9 Architecture cleanup phase 3: Fence obsolete reader observations
+- 3dfca75 Architecture cleanup phase 4: Share negotiated sessions and delivery
+- 474049a Architecture cleanup phase 5: Separate logical devices and backend policy
+- 7fc4b78 Architecture cleanup phase 6: Separate board services and activity semantics
+- bfa1f27 Architecture cleanup phase 7: Remove obsolete host entry points
+- c316e67 Architecture cleanup phase 7: Consolidate protocol and validity limits
+- 3e14aa2 Architecture cleanup phase 7: Generate build versions from package metadata
+- 6621070 Architecture cleanup phase 7: Remove single-display policy coupling
+- 69e6e7e Architecture cleanup phase 8: Verify both packaged panel paths
+- 381d1b6 Architecture cleanup phase 7: Remove extraction import leftovers
+- 4c11b4e Architecture cleanup phase 8: Broker known-device captures through maintenance
+- b18fc9e Architecture cleanup phase 8: Preserve telemetry across BLE maintenance
+- 501b039 Architecture cleanup phase 8: finish BLE disconnect before cancellation
+- 91af6dc Architecture cleanup phase 8: document current boundaries and audit fixes
+- 0bbd194 Architecture cleanup phase 8: restore page after rejected capture
+- 2cb411e Architecture cleanup phase 8: await native USB probe quiescence
+- f14a0aa Architecture cleanup phase 8: capture settled Ball frames
+- ad4c0f3 Architecture cleanup phase 8: retain rejected capture evidence
+- 16b903b Architecture cleanup phase 8: bound C6 screenshot USB writes
+- 4eca4de Architecture cleanup phase 7: remove stale status migration remnants
+- 4b9a7e9 Architecture cleanup phase 8: wait for reconnect before fixture restoration
+- a8bd19f Architecture cleanup phase 8: retain exact-package acceptance matrix
