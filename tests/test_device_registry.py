@@ -97,14 +97,14 @@ def test_usb_registration_requires_verified_full_id_without_bluetooth(tmp_path,m
     from types import SimpleNamespace
     from codexmeter import cli
     from codexmeter.device_registry import DeviceRegistry
-    from codexmeter.usb_protocol import UsbIdentity
+    from codexmeter.companion_protocol import NegotiatedIdentity
     import codexmeter.usb_transport as usb
     import json
     path=tmp_path/'devices.json';registry=DeviceRegistry(path)
     monkeypatch.setattr(cli.DeviceRegistry,'load',lambda:registry)
     async def offline(event): raise FileNotFoundError('isolated test: no daemon')
     monkeypatch.setattr(cli, 'send_event', offline)
-    identity=UsbIdentity.parse(b'IDENTITY '+json.dumps({'device_id':'codexmeter-001122334455',
+    identity=NegotiatedIdentity.parse(b'IDENTITY '+json.dumps({'device_id':'codexmeter-001122334455',
         'short_id':'001122','name':'CodexMeter-001122','usb':1,'app':1,'boot':'0011223344556677',
         'model':'waveshare_c6_amoled_216','fw':'test','capabilities':['screen','brightness','rotation']}).encode())
     class Discovery:

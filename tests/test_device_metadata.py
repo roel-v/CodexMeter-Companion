@@ -54,13 +54,13 @@ def test_malformed_metadata_fails_closed(fields):
 @pytest.mark.parametrize("model", ["waveshare_c6_amoled_216", "spotpear_ball_v2", "waveshare_amoled_216"])
 def test_same_identity_metadata_over_both_transports(model):
     from codexmeter.device_identity import DeviceIdentity
-    from codexmeter.usb_protocol import UsbIdentity
+    from codexmeter.companion_protocol import NegotiatedIdentity
     fields = dict(device_id="codexmeter-001122334455", short_id="001122",
                   name="CodexMeter-001122", model=model, fw="3.12.3.4", app=1,
                   usb=1, boot="0011223344556677",
                   capabilities=["brightness", "screen", "rotation"])
     raw = json.dumps(fields).encode()
-    assert DeviceIdentity.from_bytes(raw).metadata == UsbIdentity.parse(b"IDENTITY " + raw).metadata
+    assert DeviceIdentity.from_bytes(raw).metadata == NegotiatedIdentity.parse(b"IDENTITY " + raw).metadata
     assert DeviceIdentity.from_bytes(raw).metadata.compatibility == "compatible"
 
 

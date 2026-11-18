@@ -425,14 +425,12 @@ class BleTransport:
         return used_successfully
 
     async def _negotiated(self, client, identity, queue, state, stop_event):
-        from types import SimpleNamespace
         from .ble_session import BleSession
         from .host_identity import load_host_id
-        from .usb_worker import UsbDeviceWorker
+        from .delivery_pump import DeliveryPump
         from .delivery import negotiated_replay
         session=BleSession(client,identity,load_host_id())
-        delivery=UsbDeviceWorker(SimpleNamespace(state=state),None,'')
-        delivery.session=session
+        delivery=DeliveryPump(state, session)
         try:
             await session.open()
             state.connected=True;state.transport='bluetooth';state.generation=session.generation
@@ -443,13 +441,13 @@ class BleTransport:
             replay = negotiated_replay(state, same_host=session.state['same_host'])
             hook = getattr(self, 'on_reconciled', None)
             if hook:
-                await hook(delivery.slot, session)
+                await hook(state, session)
             for payload in replay:
-                await delivery._deliver(payload)
+                await delivery.deliver(payload)
             while client.is_connected and not stop_event.is_set() and not session.failure:
                 try: payload=await asyncio.wait_for(queue.get(),.1)
                 except TimeoutError:continue
-                await delivery._deliver(payload)
+                await delivery.deliver(payload)
             if session.failure:raise session.failure
             return True
         finally:

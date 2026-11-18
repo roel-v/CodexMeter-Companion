@@ -99,7 +99,7 @@ class MaintenanceGuard:
         """Follow-mode renewals use the existing exclusive serial handle."""
         if self.lease.get('quiescence') == 'unsupported_legacy' or time.monotonic() - self.renewed < 60:
             return
-        from codexmeter.usb_protocol import encode_control
+        from codexmeter.companion_protocol import encode_control
         self.q += 1
         serial.write_command(encode_control('maint', self.q, self.lease['boot'],
             host=load_host_id(), token=self.lease['token']))

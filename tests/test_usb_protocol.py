@@ -1,5 +1,5 @@
 import pytest
-from codexmeter.usb_protocol import *
+from codexmeter.companion_protocol import *
 
 B = "0011223344556677"
 T = "b" * 32
@@ -88,7 +88,7 @@ def identity_data():
 )
 def test_incompatible_identity_is_never_legacy(change):
     with pytest.raises(ProtocolError):
-        UsbIdentity.parse(
+        NegotiatedIdentity.parse(
             b"IDENTITY " + json.dumps({**identity_data(), **change}).encode()
         )
 

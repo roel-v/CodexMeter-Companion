@@ -4,8 +4,9 @@ from __future__ import annotations
 import asyncio
 import struct
 import time
-from .usb_transport import UsbSession, UsbDiscovered, UsbCandidate, UsbError
-from .usb_protocol import UsbIdentity, ProtocolError
+from .companion_session import CompanionSession
+from .transport_types import Endpoint, TransportError
+from .companion_protocol import NegotiatedIdentity, ProtocolError
 from .settings import RX_CHAR_UUID, TX_CHAR_UUID
 
 
@@ -69,7 +70,7 @@ class BleWireChannel:
         if frame is None:
             return
         if self.lines.full():
-            self.failure = UsbError("BLE reply queue overflow")
+            self.failure = TransportError("BLE reply queue overflow")
             return
         self.lines.put_nowait(frame)
 
@@ -80,7 +81,7 @@ class BleWireChannel:
 
     async def write(self, frame):
         if self.closed:
-            raise UsbError("BLE wire closed")
+            raise TransportError("BLE wire closed")
         if frame == b"identity\n":
             import json
 
@@ -94,7 +95,7 @@ class BleWireChannel:
             raise ProtocolError("BLE logical frame bounds")
         capacity = min(512, max(0, getattr(self.client, "mtu_size", 23) - 3)) - 5
         if capacity < 1:
-            raise UsbError("BLE MTU cannot carry fragment")
+            raise TransportError("BLE MTU cannot carry fragment")
         async with self.lock:
 
             async def train():
@@ -117,22 +118,18 @@ class BleWireChannel:
         # The owning BleTransport disconnects. Late notifications are fenced here.
 
 
-class BleSession(UsbSession):
+class BleSession(CompanionSession):
     transport = "bluetooth"
 
     def __init__(self, client, identity, host_id):
-        parsed = UsbIdentity.parse(
+        parsed = NegotiatedIdentity.parse(
             b"IDENTITY "
             + __import__("json").dumps(identity.raw, separators=(",", ":")).encode()
         )
-        found = UsbDiscovered(
-            UsbCandidate(str(getattr(client, "address", "ble")), "ble"),
-            parsed,
-            time.monotonic(),
-        )
         super().__init__(
-            found,
+            parsed,
             host_id,
-            channel_factory=lambda _: BleWireChannel(client, parsed),
+            endpoint=Endpoint("bluetooth", parsed.device_id, str(getattr(client, "address", "ble"))),
+            channel_factory=lambda: BleWireChannel(client, parsed),
             request_timeout=2,
         )

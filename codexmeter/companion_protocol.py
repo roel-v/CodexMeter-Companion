@@ -1,4 +1,4 @@
-"""Pure, bounded USB wire-v1 codec. No serial or Bluetooth imports."""
+"""Pure, bounded companion wire-v1 codec. No serial or Bluetooth imports."""
 
 from __future__ import annotations
 import json
@@ -72,7 +72,7 @@ def object_json(raw: bytes) -> dict:
 
 
 @dataclass(frozen=True)
-class UsbIdentity:
+class NegotiatedIdentity:
     device_id: str
     short_id: str | None
     name: str | None
@@ -101,7 +101,7 @@ class UsbIdentity:
         if not isinstance(data.get("boot"), str) or not BOOT.fullmatch(data["boot"]):
             raise ProtocolError("invalid boot identity")
         if data.get("model") not in ("waveshare_c6_amoled_216", "spotpear_ball_v2", "waveshare_amoled_216"):
-            raise ProtocolError("unsupported USB model")
+            raise ProtocolError("unsupported display model")
         fw = data.get("fw")
         if (
             not isinstance(fw, str)

@@ -419,7 +419,7 @@ class DeviceManager:
                 if port:
                     self.usb_discovery.paused_ports.add(port)
 
-    async def _reconciled(self, slot, session):
+    async def _reconciled(self, state, session):
         from .screen_policy import MacLockDetector, WindowsLockDetector
         from .payloads import build_screen_control_payload
         import sys
@@ -434,7 +434,7 @@ class DeviceManager:
         result = await session.send(payload)
         if result.outcome != 'accepted':
             raise RuntimeError(result.reason or 'Live policy was not acknowledged')
-        slot.state.last_ack_at = time.monotonic()
+        state.last_ack_at = time.monotonic()
 
     def observe_lock(self, locked, now):
         self._live_policy.observe(locked, now=now)

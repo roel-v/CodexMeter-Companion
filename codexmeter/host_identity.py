@@ -7,7 +7,7 @@ import secrets
 import tempfile
 from pathlib import Path
 from .settings import APP_DIR
-from .usb_protocol import TOKEN
+from .companion_protocol import TOKEN
 
 
 def load_host_id(path: Path = APP_DIR / "host-identity.json") -> str:

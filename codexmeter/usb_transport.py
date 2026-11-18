@@ -7,16 +7,15 @@ close fences callbacks before closing the handle and joins within one second.
 from __future__ import annotations
 import asyncio
 import contextlib
-import secrets
 import threading
 import queue
 import time
 from dataclasses import dataclass
 from typing import Callable
 from .serial_backend import open_serial
-from .usb_protocol import (
+from .companion_protocol import (
     LineDecoder,
-    UsbIdentity,
+    NegotiatedIdentity,
     ProtocolError,
     encode_control,
     encode_data,
@@ -27,20 +26,8 @@ from .usb_protocol import (
 )
 from .transport_types import DeliveryResult, Endpoint
 from .payloads import Payload
-
-
-class UsbError(RuntimeError):
-    pass
-
-
-class UsbUnknownDelivery(UsbError):
-    pass
-
-
-class UsbIncompatible(ProtocolError):
-    def __init__(self, reason, device_id):
-        super().__init__(reason)
-        self.device_id = device_id
+from .companion_session import CompanionSession, read_identity, IdentityIncompatible
+from .transport_types import TransportError, UnknownDelivery
 
 
 @dataclass(frozen=True)
@@ -131,9 +118,9 @@ async def _bounded_call(function, timeout, *, late_cleanup=None, operation_key=N
     # any late cleanup finish. No native close ever runs on the event loop.
     with _OPERATION_LOCK:
         if operation_key is not None and operation_key in _OPERATION_KEYS:
-            raise UsbError("serial operation already pending")
+            raise TransportError("serial operation already pending")
         if not _OPERATION_SLOTS.acquire(blocking=False):
-            raise UsbError("serial operation capacity busy")
+            raise TransportError("serial operation capacity busy")
         if operation_key is not None:
             _OPERATION_KEYS.add(operation_key)
     loop = asyncio.get_running_loop()
@@ -206,9 +193,9 @@ class SerialChannel:
     async def open(self):
         with _OPEN_LOCK:
             if self.port in _OPEN_PORTS:
-                raise UsbError("serial open already pending")
+                raise TransportError("serial open already pending")
             if not _OPEN_SLOTS.acquire(blocking=False):
-                raise UsbError("serial open capacity busy")
+                raise TransportError("serial open capacity busy")
             _OPEN_PORTS.add(self.port)
 
         def opening():
@@ -216,7 +203,7 @@ class SerialChannel:
                 handle = open_serial(self.port, factory=self.factory)
                 if self._closing.is_set():
                     handle.close()
-                    raise UsbError("serial open cancelled")
+                    raise TransportError("serial open cancelled")
                 return handle
             finally:
                 with _OPEN_LOCK:
@@ -233,7 +220,7 @@ class SerialChannel:
         except BaseException as exc:
             self._closing.set()
             # A refused native dispatch has no worker to return its admission slot.
-            if isinstance(exc, UsbError) and str(exc) in (
+            if isinstance(exc, TransportError) and str(exc) in (
                 "serial operation already pending",
                 "serial operation capacity busy",
             ):
@@ -262,17 +249,17 @@ class SerialChannel:
                     try:
                         self.lines.put_nowait(line)
                     except queue.Full:
-                        self.error = UsbError("serial reply queue overflow")
+                        self.error = TransportError("serial reply queue overflow")
                         return
         except Exception:
             if not self._closing.is_set():
-                self.error = UsbError("serial read failed")
+                self.error = TransportError("serial read failed")
 
     async def line(self, timeout=1.0):
         deadline = time.monotonic() + timeout
         while True:
             if self.closed:
-                raise UsbError("serial channel closed")
+                raise TransportError("serial channel closed")
             if self.error:
                 raise self.error
             try:
@@ -286,17 +273,17 @@ class SerialChannel:
     async def write(self, frame):
         async with self._write_lock:
             if self.closed:
-                raise UsbError("serial channel closed")
+                raise TransportError("serial channel closed")
 
             def writing():
                 offset = 0
                 deadline = time.monotonic() + 0.5
                 while offset < len(frame):
                     if self._closing.is_set() or time.monotonic() >= deadline:
-                        raise UsbUnknownDelivery("serial write deadline")
+                        raise UnknownDelivery("serial write deadline")
                     count = self.handle.write(frame[offset:])
                     if not count:
-                        raise UsbUnknownDelivery("serial write incomplete")
+                        raise UnknownDelivery("serial write incomplete")
                     offset += count
 
             try:
@@ -306,7 +293,7 @@ class SerialChannel:
                 raise
             except Exception as exc:
                 await self.close()
-                raise UsbUnknownDelivery(
+                raise UnknownDelivery(
                     "serial write failed; outcome unknown"
                 ) from exc
 
@@ -327,35 +314,15 @@ class SerialChannel:
             if self.thread is not None:
                 self.thread.join(0.8)
                 if self.thread.is_alive():
-                    raise UsbError("serial reader failed to stop")
+                    raise TransportError("serial reader failed to stop")
 
         await _bounded_call(closing, 1.0, operation_key=("close", self.port))
-
-
-async def read_identity(channel: SerialChannel, timeout=1.0) -> UsbIdentity:
-    await channel.write(b"identity\n")
-    deadline = asyncio.get_running_loop().time() + timeout
-    while True:
-        line = await channel.line(
-            max(0.001, deadline - asyncio.get_running_loop().time())
-        )
-        if line.startswith(b"IDENTITY "):
-            try:
-                return UsbIdentity.parse(line)
-            except ProtocolError as exc:
-                basic = object_json(line[9:])
-                identity = basic.get("device_id")
-                if isinstance(identity, str) and FULL_ID.fullmatch(identity):
-                    raise UsbIncompatible(str(exc), identity) from exc
-                raise
-        if asyncio.get_running_loop().time() >= deadline:
-            raise TimeoutError("USB identity timed out")
 
 
 @dataclass(frozen=True)
 class UsbDiscovered:
     candidate: UsbCandidate
-    identity: UsbIdentity
+    identity: NegotiatedIdentity
     seen_at: float
 
     @property
@@ -466,7 +433,7 @@ class UsbDiscovery:
                 except Exception as exc:
                     self.devices.pop(candidate.port, None)
                     self.stability.pop(candidate.port, None)
-                    if isinstance(exc, UsbIncompatible):
+                    if isinstance(exc, IdentityIncompatible):
                         self.unsupported[candidate.port] = {
                             "device_id": exc.device_id,
                             "port": candidate.port,
@@ -562,280 +529,14 @@ class UsbDiscovery:
         }
 
 
-class UsbSession:
-    transport = "usb"
-
-    def __init__(
-        self,
-        discovered: UsbDiscovered,
-        host_id: str,
-        *,
-        channel_factory=SerialChannel,
-        request_timeout=1.0,
-        clock=time.monotonic,
-    ):
-        self.discovered = discovered
-        self.host_id = host_id
-        self.channel_factory = channel_factory
-        self.timeout = request_timeout
-        self.clock = clock
-        self.generation = secrets.token_hex(16)
-        self.token = self.generation
-        self.identity = discovered.identity
-        self.channel = None
-        self._q = 0
-        self._seq = 1
-        self._waiters = {}
-        self._reader = None
-        self._heartbeat = None
-        self._send_lock = asyncio.Lock()
-        self._closed = False
-        self._claimed = False
-        self.state = {}
-        self.failure = None
-        self.last_ping = None
-
-    async def open(self, *, maintenance=False):
-        try:
-            self.channel = self.channel_factory(self.discovered.candidate.port)
-            await self.channel.open()
-            identity = await read_identity(self.channel)
-            if (
-                identity.device_id != self.identity.device_id
-                or identity.boot != self.identity.boot
-            ):
-                raise UsbError("USB port identity/boot changed; rediscovery required")
-            self._reader = asyncio.create_task(self._read())
-            reply = await self._control("maint" if maintenance else "claim", host=self.host_id, token=self.token)
-            if reply["ok"] is not True:
-                raise UsbError(reply["err"])
-            if maintenance:
-                return self
-            self.state = self._valid_state(reply.get("state"))
-            self._claimed = True
-            self.last_ping = self.clock()
-            self._heartbeat = asyncio.create_task(self._ping_loop())
-            return self
-        except BaseException:
-            await self.close(release=False)
-            raise
-
-    @staticmethod
-    def _valid_state(state):
-        if not isinstance(state, dict):
-            raise ProtocolError("state required")
-        for key in (
-            "same_host",
-            "auto_rotation",
-            "manual_on",
-            "policy_on",
-            "screen_on",
-        ):
-            if type(state.get(key)) is not bool:
-                raise ProtocolError("invalid device state")
-        for key, maximum in (("rev", UINT32), ("page", UINT32), ("brightness", 100)):
-            if type(state.get(key)) is not int or not 0 <= state[key] <= maximum:
-                raise ProtocolError("invalid device state")
-        if (
-            state["rev"] == 0
-            or type(state.get("rotation")) is not int
-            or state["rotation"] not in (0, 90, 180, 270)
-        ):
-            raise ProtocolError("invalid device state")
-        return dict(state)
-
-    def _fail(self, exc):
-        self.failure = exc
-        for future in list(self._waiters.values()):
-            if not future.done():
-                future.set_exception(exc)
-
-    async def _read(self):
-        try:
-            while not self._closed:
-                try:
-                    line = await self.channel.line(0.1)
-                except TimeoutError:
-                    continue
-                reply = parse_reply(line)
-                if reply is None:
-                    continue
-                if reply["boot"] != self.identity.boot:
-                    self._fail(UsbError("USB boot changed"))
-                    return
-                if reply.get("op") == "owner":
-                    self._fail(UsbError(reply["err"]))
-                    return
-                key = ("seq", reply["seq"]) if "seq" in reply else ("q", reply["q"])
-                future = self._waiters.get(key)
-                if future is None or future.done():
-                    continue
-                if reply.get("token") != self.token:
-                    continue
-                future.set_result(reply)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            self._fail(exc)
-
-    async def _exchange(self, key, frame, *, retry=False):
-        if self._closed or self.failure:
-            raise UsbError("USB session unavailable") from self.failure
-        future = asyncio.get_running_loop().create_future()
-        if key in self._waiters:
-            raise UsbError("duplicate USB waiter")
-        self._waiters[key] = future
-        try:
-            for attempt in range(2 if retry else 1):
-                await self.channel.write(frame)
-                try:
-                    return await asyncio.wait_for(asyncio.shield(future), self.timeout)
-                except TimeoutError:
-                    if not retry or attempt:
-                        raise UsbUnknownDelivery("USB reply deadline; outcome unknown")
-        finally:
-            self._waiters.pop(key, None)
-            if not future.done():
-                future.cancel()
-            elif not future.cancelled():
-                future.exception()
-
-    async def _control(self, op, **fields):
-        self._q += 1
-        if self._q > UINT32:
-            raise UsbError("USB request IDs exhausted; reconnect")
-        return await self._exchange(
-            ("q", self._q), encode_control(op, self._q, self.identity.boot, **fields)
-        )
-
-    async def _ping_loop(self):
-        due = self.clock() + 2
-        misses = 0
-        try:
-            while not self._closed:
-                await asyncio.sleep(max(0, due - self.clock()))
-                due += 2
-                try:
-                    reply = await self._control("ping", token=self.token)
-                    if not reply["ok"]:
-                        raise UsbError(reply["err"])
-                    misses = 0
-                    self.last_ping = self.clock()
-                except UsbUnknownDelivery:
-                    misses += 1
-                    if misses >= 3:
-                        raise UsbError("USB heartbeat lost")
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            self._fail(exc)
-            if self.channel:
-                await self.channel.close()
-
-    async def maintenance(self):
-        reply = await self._control("maint", host=self.host_id, token=self.token)
-        if not reply["ok"]:
-            raise UsbError(reply["err"])
-        self._claimed = False
-        if self._heartbeat:
-            self._heartbeat.cancel()
-            await asyncio.gather(self._heartbeat, return_exceptions=True)
-        return {"boot": self.identity.boot, "token": self.token, "port": self.discovered.candidate.port}
-
-    async def end_maintenance(self):
-        reply = await self._control("maint_end", token=self.token)
-        if not reply["ok"] and reply.get("err") != "stale_session":
-            raise UsbError(reply["err"])
-
-    async def read_state(self):
-        reply = await self._control("state", token=self.token)
-        if not reply["ok"]:
-            raise UsbError(reply["err"])
-        self.state = self._valid_state(reply.get("state"))
-        return dict(self.state)
-
-    async def send(
-        self, payload: Payload, *, expected_boot=None, expected_revision=None
-    ) -> DeliveryResult:
-        async with self._send_lock:
-            if self._seq > UINT32:
-                raise UsbError("USB sequence exhausted; reconnect")
-            revision = None
-            if payload.kind == "control":
-                policy = payload.data.get("cmd") == "screen" and payload.data.get(
-                    "why"
-                ) in ("lock", "unlock")
-                if not policy:
-                    if expected_boot != self.identity.boot or expected_revision is None:
-                        return DeliveryResult(
-                            "rejected",
-                            self.transport,
-                            self.generation,
-                            None,
-                            "stale explicit intent",
-                        )
-                    revision = expected_revision
-            seq = self._seq
-            frame = encode_data(
-                self.identity.boot, self.token, seq, revision, payload.to_json_bytes()
-            )
-            try:
-                reply = await self._exchange(("seq", seq), frame, retry=True)
-            except UsbUnknownDelivery as exc:
-                self._fail(exc)
-                await self.close(release=False)
-                return DeliveryResult(
-                    "unknown", self.transport, self.generation, seq, str(exc)
-                )
-            except asyncio.CancelledError:
-                await self.close(release=False)
-                raise
-            if reply["ok"]:
-                self._seq += 1
-                return DeliveryResult("accepted", self.transport, self.generation, seq)
-            error = reply["err"]
-            if error in ("bad_request", "unsupported", "conflict"):
-                self._seq += 1
-            else:
-                self._fail(UsbError(error))
-            return DeliveryResult(
-                "rejected", self.transport, self.generation, seq, error
-            )
-
-    async def close(self, *, release=True):
-        if self._closed:
-            return
-        try:
-            if release and self._claimed and not self.failure:
-                with contextlib.suppress(Exception):
-                    await asyncio.wait_for(
-                        self._control("release", token=self.token), 0.5
-                    )
-        finally:
-            self._closed = True
-            self._claimed = False
-            self._fail(UsbError("USB session closed"))
-            current = asyncio.current_task()
-            tasks = [
-                t
-                for t in (self._heartbeat, self._reader)
-                if t is not None and t is not current
-            ]
-            for task in tasks:
-                task.cancel()
-
-            async def cleanup():
-                if self.channel:
-                    await self.channel.close()
-                if tasks:
-                    await asyncio.gather(*tasks, return_exceptions=True)
-
-            cleanup_task = asyncio.create_task(cleanup())
-            try:
-                await asyncio.shield(cleanup_task)
-            except asyncio.CancelledError:
-                await cleanup_task
-                raise
+class UsbSession(CompanionSession):
+    """Serial endpoint adapter for the common negotiated session."""
+    def __init__(self, discovered, host_id, *, channel_factory=SerialChannel,
+                 request_timeout=1.0, clock=time.monotonic):
+        super().__init__(discovered.identity, host_id,
+                         endpoint=Endpoint("usb", discovered.identity.device_id, discovered.candidate.port),
+                         channel_factory=lambda: channel_factory(discovered.candidate.port),
+                         request_timeout=request_timeout, clock=clock)
 
 
 async def bluetooth_availability():
@@ -865,7 +566,7 @@ async def maintenance_connection(port, host_id, token=None, expected_id=None):
     finally:
         await channel.close()
     if expected_id and identity.device_id != expected_id:
-        raise UsbError('Maintenance device identity mismatch')
+        raise TransportError('Maintenance device identity mismatch')
     found = UsbDiscovered(UsbCandidate(port, port), identity, time.monotonic())
     session = UsbSession(found, host_id)
     if token:
@@ -886,14 +587,14 @@ async def inspect_maintenance_identity(port):
             if line.startswith(b'IDENTITY '):
                 raw = object_json(line[9:])
                 if not isinstance(raw.get('device_id'), str) or not FULL_ID.fullmatch(raw['device_id']):
-                    raise UsbError('Maintenance full identity required')
+                    raise TransportError('Maintenance full identity required')
                 if 'usb' not in raw:
                     short_id = raw.get('short_id')
                     if not isinstance(short_id, str) or not short_id or raw.get('name') != 'CodexMeter-' + short_id:
-                        raise UsbError('Legacy maintenance identity incomplete')
+                        raise TransportError('Legacy maintenance identity incomplete')
                     return raw, True
-                UsbIdentity.parse(line)  # Malformed/unsupported updated firmware is never legacy.
+                NegotiatedIdentity.parse(line)  # Malformed/unsupported updated firmware is never legacy.
                 return raw, False
-        raise UsbError('Maintenance identity unavailable')
+        raise TransportError('Maintenance identity unavailable')
     finally:
         await channel.close()

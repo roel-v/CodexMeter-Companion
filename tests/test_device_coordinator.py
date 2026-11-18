@@ -193,7 +193,7 @@ def test_fresh_policy_is_observed_after_reconciliation_and_never_manual_on():
             async def send(self,payload):
                 events.append(payload.data)
                 return SimpleNamespace(outcome='accepted')
-        await m._reconciled(slot,Session())
+        await m._reconciled(slot.state,Session())
         assert events[0]=='OS now' and events[1]['why']=='unlock'
         assert slot.state.device_state['manual_on'] is False
     asyncio.run(run())
@@ -308,11 +308,11 @@ def test_current_locked_policy_respects_timeout_after_fresh_os_read():
         sent=[]
         class Session:
             async def send(self,p): sent.append(p);return SimpleNamespace(outcome='accepted')
-        await m._reconciled(m.slots[0],Session())
+        await m._reconciled(m.slots[0].state,Session())
         assert sent[-1].data['on'] is True
         m.observe_lock(True,time.monotonic()-61)
         m._live_policy.locked_since=time.monotonic()-61
-        await m._reconciled(m.slots[0],Session())
+        await m._reconciled(m.slots[0].state,Session())
         assert sent[-1].data['on'] is False and sent[-1].data['why']=='lock'
     asyncio.run(run())
 

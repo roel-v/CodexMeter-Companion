@@ -6,7 +6,7 @@ import time
 import builtins
 import pytest
 from codexmeter.usb_transport import *
-from codexmeter.usb_protocol import UsbIdentity
+from codexmeter.companion_protocol import NegotiatedIdentity
 from codexmeter.payloads import Payload
 
 B = "0011223344556677"
@@ -37,7 +37,7 @@ IDENTITY = {
 
 
 def discovered(port="COMTEST"):
-    identity = UsbIdentity.parse(b"IDENTITY " + json.dumps(IDENTITY).encode())
+    identity = NegotiatedIdentity.parse(b"IDENTITY " + json.dumps(IDENTITY).encode())
     return UsbDiscovered(UsbCandidate(port, port), identity, time.monotonic())
 
 
@@ -161,7 +161,7 @@ def test_com_reuse_rejected_before_claim():
         c = FakeChannel("x")
         c.changed = True
         s = UsbSession(discovered(), H, channel_factory=lambda _: c)
-        with pytest.raises(UsbError, match="identity/boot changed"):
+        with pytest.raises(TransportError, match="identity/boot changed"):
             await s.open()
         assert c.writes == [b"identity\n"] and c.closed
 
@@ -372,7 +372,7 @@ def test_hung_native_cleanup_and_repeated_open_do_not_starve_peer():
         with pytest.raises(TimeoutError):
             await task
         for _ in range(12):
-            with pytest.raises(UsbError):
+            with pytest.raises(TransportError):
                 await SerialChannel("repeat-hung", factory=FakeSerial).open()
         released.set()
         await asyncio.sleep(0.03)

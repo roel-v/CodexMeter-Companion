@@ -46,3 +46,12 @@ Quota and unread-account context changes reset recovery evidence; unread samples
 changes during database reads. Context fingerprints are local and absent from status/diagnostics.
 Validation: 54 reader, daemon and compatibility tests passed, including delayed success/failure
 and account rebind regressions.
+
+## Phase 4 — Shared sessions and delivery
+
+Extracted CompanionSession, companion wire codec and DeliveryPump. USB/BLE are sibling adapters;
+Bluetooth no longer manufactures serial candidates or invokes a USB worker. Session contracts now
+include actual boot/revision preconditions and lifecycle fields. Policy callbacks take delivery state.
+Validation: 59 focused transport tests passed. Full suite: 379 passed, one Windows launcher
+lifetime fixture missed its marker; isolated rerun plus coordinator tests: 29 passed. The launcher
+code is unchanged; retain this intermittent test observation for final verification.

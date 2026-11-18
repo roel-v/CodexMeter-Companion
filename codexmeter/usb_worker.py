@@ -11,8 +11,9 @@ from .delivery import (
     accepted_alert,
     prune_alerts,
 )
-from .usb_transport import UsbSession, UsbError
+from .usb_transport import UsbSession
 from .payloads import Payload
+from .delivery_pump import DeliveryPump
 
 
 class UsbDeviceWorker:
@@ -34,65 +35,6 @@ class UsbDeviceWorker:
         self.on_reconciled = None
         self.single_attempt = False
 
-    async def _deliver(self, payload):
-        state = self.slot.state
-        if payload.kind in ("usage", "activity"):
-            if (
-                time.monotonic() - state.observed_at.get(payload.kind, float("-inf"))
-                >= 300
-            ):
-                return
-            if not should_send(payload, state):
-                return
-        if payload.kind == "alert":
-            prune_alerts(state)
-            if not any(
-                p.data.get("id") == payload.data.get("id") for _, p in state.alerts
-            ):
-                return
-        expected = state.explicit_intents.get(id(payload))
-        data = payload.data
-        if payload.kind == "control" and data.get("cmd") == "screen":
-            why = data.get("why")
-            if why == "ble_restored":
-                return
-            if why in ("mac_locked", "mac_unlocked"):
-                payload = Payload(
-                    payload.kind,
-                    {**data, "why": "lock" if why == "mac_locked" else "unlock"},
-                )
-        state.last_write_at = time.monotonic()
-        result = await self.session.send(
-            payload,
-            expected_boot=expected[0] if expected else None,
-            expected_revision=expected[1] if expected else None,
-        )
-        if result.outcome == "unknown":
-            raise UsbError(result.reason)
-        if result.outcome == "rejected":
-            state.explicit_intents.pop(id(payload), None)
-            state.explicit_payloads.pop(id(payload), None)
-            state.last_error = result.reason
-            if result.reason == "conflict":
-                state.device_state = {
-                    **await self.session.read_state(),
-                    "boot": self.session.identity.boot,
-                }
-            return
-        state.explicit_intents.pop(id(payload), None)
-        state.explicit_payloads.pop(id(payload), None)
-        remember_accepted(payload, state)
-        if payload.kind == "alert":
-            accepted_alert(payload, state)
-        state.last_ack_at = time.monotonic()
-        state.consecutive_failures = 0
-        state.last_error = None
-        if payload.kind == "control":
-            state.device_state = {
-                **await self.session.read_state(),
-                "boot": self.session.identity.boot,
-            }
-
     async def run(self, stop):
         backoff = 1
         state = self.slot.state
@@ -109,6 +51,7 @@ class UsbDeviceWorker:
             try:
                 self.session = self.session_factory(discovered, self.host_id)
                 await self.session.open()
+                delivery = DeliveryPump(state, self.session)
                 if self.identity_observer:
                     from .device_identity import DeviceIdentity
 
@@ -143,9 +86,9 @@ class UsbDeviceWorker:
                 # Fresh policy hook: recompute live OS policy after reconciliation, before replay.
                 # No cached ble_restored or saved manual presets are replayed.
                 if self.on_reconciled:
-                    await self.on_reconciled(self.slot, self.session)
+                    await self.on_reconciled(state, self.session)
                 for payload in replay:
-                    await self._deliver(payload)
+                    await delivery.deliver(payload)
                 while not stop.is_set() and not self.session.failure:
                     payload_task = asyncio.create_task(self.slot.queue.get())
                     stop_task = asyncio.create_task(stop.wait())
@@ -158,7 +101,7 @@ class UsbDeviceWorker:
                         if stop_task in done:
                             break
                         if payload_task in done:
-                            await self._deliver(payload_task.result())
+                            await delivery.deliver(payload_task.result())
                     finally:
                         for task in (payload_task, stop_task):
                             if not task.done():
