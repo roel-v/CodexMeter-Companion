@@ -67,7 +67,7 @@ void refresh() {
   const int values[]={m.running_count,m.waiting_count,m.done_count};
   for(int i=0;i<3;++i) {
     char text[12];
-    bool valid=i==0 ? activity.valid && millis()-activity.received_ms<15000UL : m.chat_counts_valid;
+    bool valid=values[i]>=0 && (i==0 ? activity.valid && millis()-activity.received_ms<15000UL : m.chat_counts_valid);
     if(!valid) snprintf(text,sizeof(text),"--");
     else if(values[i]>999) snprintf(text,sizeof(text),"999+");
     else snprintf(text,sizeof(text),"%d",values[i]);
@@ -196,6 +196,7 @@ void ui_set_auto_theme_interval(uint16_t) {}
 uint16_t ui_auto_theme_interval() { return 0; }
 void ui_set_volume(int) {}
 int ui_volume() { return 0; }
+int ui_page() { return page; }
 size_t theme_registry_count() { return 0; }
 const ThemePack* theme_registry_at(size_t) { return nullptr; }
 const ThemePack* theme_registry_find(const char*) { return nullptr; }

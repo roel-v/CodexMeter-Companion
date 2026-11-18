@@ -1076,3 +1076,4 @@ void ui_set_volume(int percent) {
 int ui_volume() {
   return device_settings_get().volume_percent;
 }
+int ui_page() { return token_detail_page ? (token_detail_week ? 2 : 1) : 0; }

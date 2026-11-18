@@ -5,3 +5,5 @@ const char* identity_device_id();
 const char* identity_short_id();
 const char* identity_ble_name();
 const char* identity_json();
+const char* identity_boot();
+void identity_new_boot_generation();

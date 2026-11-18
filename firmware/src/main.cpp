@@ -6,6 +6,9 @@
 #include <esp_rom_crc.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
+#if ARDUINO_USB_MODE == 1 && SOC_USB_SERIAL_JTAG_SUPPORTED
+#include <hal/usb_serial_jtag_ll.h>
+#endif
 
 #include "ble_service.h"
 #include "config.h"
@@ -20,6 +23,8 @@
 #include "theme_registry.h"
 #include "ui.h"
 #include "touch_input.h"
+#include "companion_protocol.h"
+#include "wire_json.h"
 
 #ifdef BOARD_HAS_PSRAM
 #define LV_BUF_CAPS MALLOC_CAP_SPIRAM
@@ -63,8 +68,10 @@ static UsageModel usage;
 static AlertModel alert;
 static ActivityModel activity;
 static ControlModel control;
-static char recent_alert_ids[8][sizeof(alert.id)];
-static uint8_t recent_alert_index = 0;
+static companion::Protocol companion_protocol;
+static companion::AlertLedger alert_ledger;
+static bool manual_screen_on = true, policy_screen_on = true;
+static uint32_t settings_revision = 1;
 static uint32_t last_usage_ms = 0;
 static uint32_t last_host_payload_ms = 0;
 // Bounded serial-only UI validation; never persisted across reboot.
@@ -319,7 +326,10 @@ static const char* non_empty_reason(const char* reason) {
   return reason && reason[0] ? reason : "control";
 }
 
-static void set_screen_on(bool on, const char* reason) {
+static void set_screen_on(bool on, const char* reason, bool legacy = false) {
+  bool policy = companion::screen_policy_reason(reason,legacy,on);
+  if (policy) policy_screen_on = on; else manual_screen_on = on;
+  on = manual_screen_on && policy_screen_on;
   if (screen_on == on) return;
 
   screen_on = on;
@@ -332,13 +342,13 @@ static void set_screen_on(bool on, const char* reason) {
     ui_set_display_active(true);
     lv_obj_invalidate(lv_screen_active());
     lv_refr_now(nullptr);
-    device_logf("INFO", "screen on %s", non_empty_reason(reason));
+    device_logf("INFO", "screen on %s", policy ? "policy" : "manual");
   } else {
     ui_set_display_active(false);
     imu_set_display_active(false);
     power_set_display_active(false);
     gfx->displayOff();
-    device_logf("INFO", "screen off %s", non_empty_reason(reason));
+    device_logf("INFO", "screen off %s", policy ? "policy" : "manual");
   }
 }
 
@@ -350,9 +360,6 @@ static void set_brightness_percent_internal(
     int pct, const char* reason, bool show_overlay) {
   brightness_percent = clamp_brightness(pct);
   device_settings_set_brightness(brightness_percent);
-  if (!screen_on) {
-    set_screen_on(true, "brightness");
-  }
   apply_brightness();
   if (show_overlay) {
     ui_show_brightness(brightness_percent);
@@ -424,12 +431,40 @@ static void handle_orientation() {
   }
 }
 
-static void handle_json(const char* json) {
-  PayloadKind kind = parse_payload(json, &usage, &alert, &activity, &control);
-  if (kind != PAYLOAD_NONE) {
-    last_host_payload_ms = millis();
+static const char* handle_json(const char* json, const char* revision) {
+  UsageModel next_usage = usage;
+  AlertModel next_alert;
+  ActivityModel next_activity = activity;
+  ControlModel next_control;
+  PayloadKind kind = parse_payload(json, &next_usage, &next_alert, &next_activity, &next_control);
+  if (kind == PAYLOAD_NONE) return "bad_request";
+  if (kind == PAYLOAD_CONTROL && revision) {
+    bool policy = !strcmp(next_control.command,"screen") &&
+      (!strcmp(next_control.reason,"lock") || !strcmp(next_control.reason,"unlock"));
+    if (policy && ((!strcmp(next_control.reason,"lock") && next_control.screen_on) ||
+                   (!strcmp(next_control.reason,"unlock") && !next_control.screen_on))) return "bad_request";
+    if (policy) { if (strcmp(revision,"-")) return "bad_request"; }
+    else {
+      uint32_t expected = 0;
+      if (!companion::decimal(revision,expected,true)) return "bad_request";
+      if (expected != settings_revision) return "conflict";
+    }
+  } else if (revision && strcmp(revision,"-")) return "bad_request";
+  if (kind == PAYLOAD_ALERT) {
+    int result = alert_ledger.accept(next_alert.id,millis());
+    if (result < 0) return "conflict";
+    if (result > 0) return nullptr;
   }
-  if (kind == PAYLOAD_USAGE || kind == PAYLOAD_ACTIVITY || kind == PAYLOAD_ALERT) {
+  // Parsing and ownership/revision checks completed before any model mutation.
+  if(kind==PAYLOAD_CONTROL && !strcmp(next_control.command,"rotation")) {
+    if(!imu_set_rotation_quadrant(next_control.value/90))return "unsupported";
+  }
+  if(kind==PAYLOAD_USAGE)usage=next_usage;
+  if(kind==PAYLOAD_ALERT)alert=next_alert;
+  if(kind==PAYLOAD_ACTIVITY)activity=next_activity;
+  if(kind==PAYLOAD_CONTROL)control=next_control;
+  if (kind == PAYLOAD_USAGE || kind == PAYLOAD_ACTIVITY) {
+    last_host_payload_ms = millis();
     // Waiting is a visible view, not a power state. Data must never undo an
     // explicit local/host screen-off request, including after reconnection.
     ui_set_waiting(false);
@@ -438,39 +473,17 @@ static void handle_json(const char* json) {
     last_usage_ms = millis();
     ui_update_usage(usage);
     device_logf(
-        "INFO", "usage h5=%d d7=%d td=%llu t7=%llu token_mode=%d status=%s",
+        "INFO", "usage h5=%d d7=%d td=%llu t7=%llu token_mode=%d",
         usage.h5_remaining, usage.d7_remaining,
         (unsigned long long)usage.today_tokens,
         (unsigned long long)usage.last_7d_tokens,
-        usage.h5_remaining < 0 && usage.d7_remaining >= 0 ? 1 : 0,
-        usage.status);
-    ble_service_ack();
+        usage.h5_remaining < 0 && usage.d7_remaining >= 0 ? 1 : 0);
   } else if (kind == PAYLOAD_ALERT) {
-    bool duplicate = false;
-    if (alert.id[0]) {
-      for (const auto& recent_id : recent_alert_ids) {
-        if (strcmp(recent_id, alert.id) == 0) {
-          duplicate = true;
-          break;
-        }
-      }
-    }
     if (alert.has_running_count) {
       activity.valid = true;
       activity.running_count = alert.running_count;
       activity.updated_at = alert.received_at;
       ui_update_activity(activity);
-    }
-    if (duplicate) {
-      device_logf("INFO", "duplicate alert id=%s", alert.id);
-      ble_service_ack();
-      return;
-    }
-    if (alert.id[0]) {
-      strlcpy(
-          recent_alert_ids[recent_alert_index], alert.id,
-          sizeof(recent_alert_ids[recent_alert_index]));
-      recent_alert_index = (recent_alert_index + 1) % 8;
     }
     ui_show_alert(alert);
     if (alert.has_running_count) {
@@ -478,32 +491,28 @@ static void handle_json(const char* json) {
     } else {
       device_logf("INFO", "alert id=%s run=n/a", alert.id);
     }
-    ble_service_ack();
   } else if (kind == PAYLOAD_ACTIVITY) {
     ui_update_activity(activity);
     device_logf("INFO", "activity run=%d wait=%d done=%d chats=%d",
         activity.running_count, activity.waiting_count, activity.done_count,
         activity.chat_counts_valid);
-    ble_service_ack();
   } else if (kind == PAYLOAD_CONTROL) {
     if (strcmp(control.command, "brightness") == 0) {
-      set_brightness_percent(control.value,"companion"); ble_service_ack();
+      set_brightness_percent(control.value,"companion");
     } else if (strcmp(control.command, "rotation") == 0) {
-      if (imu_set_rotation_quadrant(control.value/90)) ble_service_ack(); else ble_service_nack();
+      // Applied before model commit above.
     } else if (strcmp(control.command, "screen") == 0) {
-      set_screen_on(control.screen_on, control.reason);
-      device_logf(
-          "INFO", "control screen=%d reason=%s", control.screen_on ? 1 : 0,
-          non_empty_reason(control.reason));
-      ble_service_ack();
+      set_screen_on(control.screen_on, control.reason,revision==nullptr);
+      device_logf("INFO", "control screen=%d", control.screen_on ? 1 : 0);
     } else {
       device_logf("WARN", "invalid control command");
-      ble_service_nack();
+      return "unsupported";
     }
   } else {
     device_logf("WARN", "invalid payload");
-    ble_service_nack();
+    return "bad_request";
   }
+  return nullptr;
 }
 
 static void send_screenshot() {
@@ -578,13 +587,7 @@ static void send_screenshot() {
 #endif
 }
 
-static void handle_serial() {
-  static char buf[520];
-  static size_t pos = 0;
-  while (Serial.available()) {
-    char c = (char)Serial.read();
-    if (c == '\n' || c == '\r') {
-      buf[pos] = '\0';
+static void handle_raw_line(const char* buf) {
       if (strcmp(buf, "demo_usage") == 0) {
         usage_apply_demo(&usage);
         last_usage_ms = millis();
@@ -710,6 +713,7 @@ static void handle_serial() {
       } else if (strcmp(buf, "imu") == 0) {
         imu_print_status(Serial);
       } else if (strcmp(buf, "identity") == 0) {
+        companion_protocol.identity(companion::Endpoint::Usb);
         Serial.print("IDENTITY ");
         Serial.println(identity_json());
       } else if (strcmp(buf, "heap") == 0) {
@@ -758,13 +762,88 @@ static void handle_serial() {
       } else if (strcmp(buf, "log_clear") == 0) {
         device_log_clear();
         Serial.println("LOGS_CLEARED");
-      } else if (buf[0] == '{') {
-        handle_json(buf);
       }
-      pos = 0;
-    } else if (pos < sizeof(buf) - 1) {
-      buf[pos++] = c;
+}
+
+static char usb_tx[641];
+static size_t usb_tx_size = 0, usb_tx_pos = 0;
+static uint32_t usb_tx_started = 0;
+static bool usb_tx_boundary = false;
+static uint32_t usb_rx_frames=0,usb_tx_abandoned=0,usb_tx_wait_loops=0,usb_tx_ring_bytes=0;
+static void queue_usb_reply(const char* text, const char* prefix = "") {
+  if (!text || !*text || usb_tx_size) return;
+  int n = snprintf(usb_tx,sizeof(usb_tx),"%s%s%s\n",usb_tx_boundary ? "\n" : "",prefix,text);
+  if (n <= 0 || size_t(n) >= sizeof(usb_tx)) return;
+  usb_tx_boundary = false; usb_tx_size = n; usb_tx_pos = 0; usb_tx_started = millis();
+}
+static void service_usb_tx() {
+#if ARDUINO_USB_MODE == 1 && SOC_USB_SERIAL_JTAG_SUPPORTED
+  // Pinned Arduino3.3.8 HWCDC::availableForWrite() only observes free ring
+  // space. A full ring can otherwise prevent reaching write(), which normally
+  // arms IN_EMPTY. Kick the existing ISR without writing beyond capacity,
+  // waiting, flushing queued bytes, or interpreting USB presence as ownership.
+  if(HWCDC::isPlugged()) {
+    usb_serial_jtag_ll_txfifo_flush();
+    usb_serial_jtag_ll_ena_intr_mask(USB_SERIAL_JTAG_INTR_SERIAL_IN_EMPTY);
+  }
+#endif
+  // Pump even after the final bytes entered the driver's ring: queued bytes
+  // are not evidence that the host has received them.
+  if (!usb_tx_size) return;
+  if (millis()-usb_tx_started >= 500) {
+    ++usb_tx_abandoned;
+    device_logf("WARN","USB reply abandoned sent=%u length=%u free=%d",
+      (unsigned)usb_tx_pos,(unsigned)usb_tx_size,Serial.availableForWrite());
+    usb_tx_boundary = usb_tx_pos != 0; usb_tx_size = usb_tx_pos = 0; return;
+  }
+  size_t available = Serial.availableForWrite();
+  if(!available)++usb_tx_wait_loops;
+  size_t chunk = usb_tx_size-usb_tx_pos;
+  if (chunk > 64) chunk = 64;
+  if (chunk > available) chunk = available;
+  if (chunk) {
+    size_t queued=Serial.write(reinterpret_cast<const uint8_t*>(usb_tx)+usb_tx_pos,chunk);
+    usb_tx_pos+=queued;usb_tx_ring_bytes+=queued;
+  }
+  if (usb_tx_pos == usb_tx_size) usb_tx_size = usb_tx_pos = 0;
+}
+static void handle_serial() {
+  static companion::LineDecoder decoder;
+  decoder.tick(millis());
+  service_usb_tx();
+  if (usb_tx_size) return;
+  for (unsigned budget=0; budget<128 && Serial.available(); ++budget) {
+    if (!decoder.push(uint8_t(Serial.read()),millis())) continue;
+    ++usb_rx_frames;
+    const char* line = decoder.data();
+    if (!strcmp(line,"identity")) {
+      companion_protocol.identity(companion::Endpoint::Usb);
+      queue_usb_reply(identity_json(),"IDENTITY ");
+    } else if (!strncmp(line,"CM1 ",4)) {
+      queue_usb_reply(companion_protocol.dispatch(companion::Endpoint::Usb,line,decoder.size(),millis()));
+    } else if (!strcmp(line,"health")) {
+      char health[224];uint32_t now=millis();
+      snprintf(health,sizeof(health),"HEALTH screen=%d ble=%d host_age_ms=%lu usage_age_ms=%lu wdt=%d waiting=%d usb_frames=%lu tx_abandon=%lu tx_wait=%lu tx_queued=%lu",
+        screen_on?1:0,ble_service_connected()?1:0,
+        (unsigned long)(last_host_payload_ms?now-last_host_payload_ms:0),
+        (unsigned long)(last_usage_ms?now-last_usage_ms:0),watchdog_enabled?1:0,ui_is_waiting()?1:0,
+        (unsigned long)usb_rx_frames,(unsigned long)usb_tx_abandoned,(unsigned long)usb_tx_wait_loops,(unsigned long)usb_tx_ring_bytes);
+      queue_usb_reply(health);
+    } else if (companion_protocol.raw_allowed() &&
+        (companion_protocol.session.owner==companion::Endpoint::None ||
+         companion_protocol.session.owner==companion::Endpoint::Maintenance ||
+         !strncmp(line,"logs",4) || !strcmp(line,"screenshot") || !strcmp(line,"heap") || !strcmp(line,"lvheap"))) {
+      // Raw binary diagnostics have an exclusive synchronous writer. Application
+      // USB leases prohibit them; the bounded protocol writer is empty here.
+      Serial.setTxTimeoutMs(100);
+      handle_raw_line(line);
+      Serial.setTxTimeoutMs(0);
+      device_log_serial_enabled(false);
+      // Diagnostics use their legacy writer; terminate any partial diagnostic
+      // output before the next bounded protocol/identity reply.
+      usb_tx_boundary=true;
     }
+    break;
   }
 }
 
@@ -861,16 +940,64 @@ static void handle_ble_screen_policy() {
   // A BLE link alone is not proof that the companion is supplying data.
   // Keep the boot screen until the first valid data payload, and return to it
   // on disconnection or a silent/stalled host. Never override manual power-off.
-  if (!ble_service_connected() || last_host_payload_ms == 0 ||
+  if (!companion_protocol.session.live() || last_host_payload_ms == 0 ||
       millis() - last_host_payload_ms >= CODEXMETER_HOST_STALE_SCREEN_AFTER_MS) {
     ui_set_waiting(true);
   }
 }
 
+static const char* apply_companion_payload(const char*,const char*);
+static void owner_changed(companion::Endpoint,companion::Endpoint,bool);
+static companion::DisplayState current_display_state() {
+  static companion::DisplayState previous;
+  static bool initialized=false;
+  companion::DisplayState state;
+  state.page=ui_page(); state.brightness=brightness_percent;
+  state.rotation=imu_rotation_quadrant()*90; state.auto_rotation=imu_auto_rotation_enabled();
+  state.manual_on=manual_screen_on; state.policy_on=policy_screen_on; state.screen_on=screen_on;
+  if (initialized && (state.page!=previous.page || state.brightness!=previous.brightness ||
+      state.rotation!=previous.rotation || state.auto_rotation!=previous.auto_rotation || state.manual_on!=previous.manual_on)) {
+    ++settings_revision;
+    if(!settings_revision) {
+      // Fence and renegotiate without resetting hardware or physical settings.
+      identity_new_boot_generation();settings_revision=1;alert_ledger=companion::AlertLedger{};
+      companion_protocol.init(identity_boot(),{current_display_state,apply_companion_payload,owner_changed});
+      ble_service_identity_changed();last_host_payload_ms=0;ui_set_waiting(true);
+    }
+  }
+  state.rev=settings_revision; previous=state; initialized=true; return state;
+}
+static const char* apply_companion_payload(const char* json,const char* revision) {
+  current_display_state();
+  const char* error=handle_json(json,revision);
+  if(!error)current_display_state();
+  return error;
+}
+static void owner_changed(companion::Endpoint before,companion::Endpoint after,bool same_host) {
+  bool takeover=after==companion::Endpoint::Usb || after==companion::Endpoint::Maintenance;
+  if(takeover || after==companion::Endpoint::None)
+    ble_service_fence(after==companion::Endpoint::Usb ? "busy_usb" :
+      after==companion::Endpoint::Maintenance ? "busy_maintenance" : nullptr);
+  // Same-host maintenance freezes application writes, not the current visible frame.
+  // Keep the ORIGINAL receive timestamp: the normal stale deadline still applies.
+  if (companion::preserve_maintenance_telemetry(before, after, same_host)) return;
+  // Data belongs to an active owner; claims/pings never fabricate freshness.
+  last_host_payload_ms=0;
+  if(!same_host || after==companion::Endpoint::None) {
+    usage=UsageModel{};activity=ActivityModel{};
+    ui_update_usage(usage);ui_update_activity(activity);
+  }
+  ui_set_waiting(true);
+  (void)before;
+}
+
 void setup() {
+  Serial.setRxBufferSize(1024);
   Serial.begin(115200);
+  Serial.setTxTimeoutMs(0);
   delay(300);
   identity_init();
+  companion_protocol.init(identity_boot(),{current_display_state,apply_companion_payload,owner_changed});
   Serial.printf("{\"ready\":true,\"device\":\"CodexMeter\",\"identity\":%s}\n",
                 identity_json());
   device_logf("INFO", "device ready %s", identity_ble_name());
@@ -898,6 +1025,7 @@ void setup() {
   ble_service_request_refresh();
   device_log_heap("setup_done");
   device_logf("INFO", "setup complete");
+  device_log_serial_enabled(false);
 }
 
 void loop() {
@@ -929,15 +1057,36 @@ void loop() {
   ble_service_tick();
   handle_button();
   touch_input_tick(screen_on);
+  ble_service_lock();
+  current_display_state();
+  companion_protocol.tick(millis());
+  static uint32_t observed_ble_epoch=0;
+  uint32_t ble_epoch=ble_service_epoch();
+  if(ble_epoch!=observed_ble_epoch) {
+    observed_ble_epoch=ble_epoch;
+    // Epoch changes also fence queued events. USB takeover must not clear USB.
+    companion_protocol.disconnected();
+  }
+  if(ble_service_take_identity_read())companion_protocol.identity(companion::Endpoint::Ble);
   handle_serial();
   if (screen_on) handle_orientation();
 
   uint8_t drained_payloads = 0;
   while (drained_payloads < CODEXMETER_BLE_RX_DRAIN_MAX &&
-         ble_service_has_data()) {
-    handle_json(ble_service_take_data());
+         ble_service_has_data() && ble_service_can_dispatch()) {
+    const char* message=ble_service_take_data();
+    if(ble_service_data_current()) {
+      if(!strncmp(message,"CM1 ",4))
+        ble_service_reply(companion_protocol.dispatch(companion::Endpoint::Ble,message,strlen(message),millis()));
+      else if(companion_protocol.legacy_allowed()) {
+        const char* error=handle_json(message,nullptr);
+        if(!error) { companion_protocol.legacy_accepted(millis());ble_service_ack(); }
+        else ble_service_nack();
+      }
+    }
     drained_payloads++;
   }
+  ble_service_unlock();
 
   const uint32_t now = millis();
   if (now - last_background_policy_ms >=

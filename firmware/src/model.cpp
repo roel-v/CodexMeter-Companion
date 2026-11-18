@@ -3,10 +3,19 @@
 #include <ArduinoJson.h>
 
 #include "device_log.h"
+#include "serial_protocol.h"
+#include "wire_json.h"
 
 static void copy_text(char* dst, size_t dst_size, const char* src) {
   if (!src) src = "";
   strlcpy(dst, src, dst_size);
+}
+static bool bounded_text(JsonVariantConst value,size_t bytes,size_t characters) {
+  if(!json_cstring(value))return false;
+  const char* text=value.as<const char*>();size_t n=strlen(text),count=0;
+  if(n>bytes || !companion::valid_utf8(text,n,true))return false;
+  for(size_t i=0;i<n;++i)if((uint8_t(text[i])&0xc0)!=0x80)++count;
+  return count<=characters;
 }
 
 PayloadKind parse_payload(
@@ -15,14 +24,45 @@ PayloadKind parse_payload(
     AlertModel* alert,
     ActivityModel* activity,
     ControlModel* control) {
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, json);
-  if (err) {
-    device_logf("ERROR", "JSON parse error: %s", err.c_str());
+  size_t bytes = strlen(json);
+  if (bytes > 512 || !companion::valid_utf8(json, bytes)) return PAYLOAD_NONE;
+  BoundedJsonAllocator allocator;
+  JsonDocument doc(&allocator);
+  if (!exact_json(doc,json,bytes)) {
+    device_logf("ERROR", "JSON parse error");
     return PAYLOAD_NONE;
   }
 
+  if (!doc.is<JsonObject>() || !doc["v"].is<int>() || doc["v"].as<int>() != 1 ||
+      !doc["k"].is<const char*>() || !doc["t"].is<uint32_t>()) return PAYLOAD_NONE;
   const char* kind = doc["k"] | "";
+  for(JsonPair pair:doc.as<JsonObject>())if(pair.key().size()!=strlen(pair.key().c_str()))return PAYLOAD_NONE;
+  const char* unsigned_fields[] = {"h5r","d7r","td","t7","run","wait","done"};
+  for (const char* key : unsigned_fields)
+    if (!doc[key].isNull() && !doc[key].is<uint64_t>()) return PAYLOAD_NONE;
+  for(const char* key : {"run","wait","done"})
+    if(!doc[key].isNull() && !doc[key].is<int>())return PAYLOAD_NONE;
+  for(const char* key : {"k","src","st","id","title","body","cmd","why"})
+    if(!doc[key].isNull() && !json_cstring(doc[key]))return PAYLOAD_NONE;
+  if(!doc["chats"].isNull() && !doc["chats"].is<bool>())return PAYLOAD_NONE;
+  if(!doc["st"].isNull() && strlen(doc["st"].as<const char*>())>=sizeof(usage->status))return PAYLOAD_NONE;
+  if(!doc["src"].isNull() && !bounded_text(doc["src"],32,32))return PAYLOAD_NONE;
+  if(!doc["why"].isNull() && !bounded_text(doc["why"],31,31))return PAYLOAD_NONE;
+  for (const char* key : {"h5", "d7"}) {
+    if (!doc[key].isNull() && (!doc[key].is<int>() || doc[key].as<int>() < -1 || doc[key].as<int>() > 100)) return PAYLOAD_NONE;
+  }
+  for (const char* key : {"b0", "b7"}) {
+    if (doc[key].isNull()) continue;
+    if (!doc[key].is<JsonArray>() || doc[key].size() != 8) return PAYLOAD_NONE;
+    for (JsonVariant value : doc[key].as<JsonArray>()) if (!value.is<uint64_t>()) return PAYLOAD_NONE;
+  }
+  if ((!strcmp(kind,"usage") || !strcmp(kind,"activity")) && !doc["src"].is<const char*>()) return PAYLOAD_NONE;
+  if (!strcmp(kind,"activity") && !doc["run"].isNull() && !doc["run"].is<int>()) return PAYLOAD_NONE;
+  if (!strcmp(kind,"alert")) {
+    if (!doc["id"].is<const char*>() || !companion::lower_hex(doc["id"],12) ||
+        !doc["title"].is<const char*>() || !doc["body"].is<const char*>() ||
+        !bounded_text(doc["title"],47,16) || !bounded_text(doc["body"],210,64)) return PAYLOAD_NONE;
+  }
   if (strcmp(kind, "usage") == 0) {
     usage->valid = true;
     for (int w = 0; w < 2; ++w) {
@@ -80,12 +120,10 @@ PayloadKind parse_payload(
 
   if (strcmp(kind, "activity") == 0) {
     activity->valid = true;
-    activity->running_count = doc["run"] | 0;
-    if (activity->running_count < 0) activity->running_count = 0;
+    activity->running_count = doc["run"] | -1;
     activity->waiting_count = doc["wait"] | -1;
     activity->done_count = doc["done"] | -1;
-    activity->chat_counts_valid = (doc["chats"] | false) &&
-        activity->waiting_count >= 0 && activity->done_count >= 0;
+    activity->chat_counts_valid = doc["chats"] | false;
     activity->received_ms = millis();
     activity->updated_at = doc["t"] | 0L;
     return PAYLOAD_ACTIVITY;
@@ -104,6 +142,7 @@ PayloadKind parse_payload(
       return PAYLOAD_NONE;
     }
     if (strcmp(command, "screen") == 0) {
+      if (!doc["on"].is<bool>() || (!doc["why"].isNull() && !doc["why"].is<const char*>())) return PAYLOAD_NONE;
       control->valid = true;
       control->screen_on = doc["on"] | true;
       control->updated_at = doc["t"] | 0L;
@@ -111,11 +150,11 @@ PayloadKind parse_payload(
       copy_text(control->reason, sizeof(control->reason), doc["why"] | "control");
       return PAYLOAD_CONTROL;
     }
-    device_logf("WARN", "Unknown control command: %s", command);
+    device_logf("WARN", "Unknown control command");
     return PAYLOAD_NONE;
   }
 
-  device_logf("WARN", "Unknown payload kind: %s", kind);
+  device_logf("WARN", "Unknown payload kind");
   return PAYLOAD_NONE;
 }
 

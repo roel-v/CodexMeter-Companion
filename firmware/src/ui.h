@@ -17,6 +17,7 @@ void ui_touch_gesture(int dx, int dy, int x, int y, bool tap);
 
 void ui_set_waiting(bool waiting);
 bool ui_is_waiting();
+int ui_page();
 void ui_set_display_active(bool active);
 void ui_middle_short_press();
 void ui_settings_move(int direction);
