@@ -50,6 +50,8 @@ def self_test(output: Path) -> int:
         root.update()
         display_dialog.destroy()
         result["displays_panel"] = True
+        from .device_dialog_diagnostics import check_device_commands
+        result['display_command_results'] = check_device_commands(root)
         # Constructed controls are checked without invoking live maintenance/mode changes.
         from .device_dialog import device_row
         fixture = device_row({'device_id':'codexmeter-000000000001', 'connected':True,

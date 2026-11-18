@@ -27,3 +27,7 @@ ACKs establish application; readback failures are separate. Unknown writes canno
 retain original deadlines, and expiry/supersession/ownership changes are recorded. Legacy ACKs use the same result contract.
 The original missing-result regression failed first; 110 focused delivery/IPC/legacy/maintenance tests now pass. New tests
 cover send-lock supersession, cancellation before/after dispatch, lost ACKs, durable rejection, retention and capacity.
+
+### Phase 4 panel
+Actual Tk widgets exercised with isolated IPC: queued/conflict/explicit retry, acknowledged command with failed readback, unknown outcome and settings check, selection fencing, disconnected retry, older daemon and closure. Focused panel/backend run: 15 passed. Packaged self-test invokes the same widget diagnostic.
+
