@@ -14,6 +14,7 @@ from .settings import DEVICE_NAME, DEVICES_FILE
 
 DEVICE_NAME_PREFIX = f"{DEVICE_NAME}-"
 SHORT_ID_RE = re.compile(rf"^{re.escape(DEVICE_NAME_PREFIX)}([0-9A-Fa-f]{{4,16}})$")
+CONNECTION_MODES = ('auto', 'usb_only', 'bluetooth_only')
 FULL_DEVICE_ID_RE = re.compile(r"^codexmeter-[0-9a-f]{12}$")
 
 
@@ -27,6 +28,12 @@ class DeviceConfig:
     macos_uuid: str | None = None
     legacy: bool = False
     metadata: DeviceMetadata = DeviceMetadata()
+    connection_mode: str = "auto"
+    maintenance: dict | None = None
+
+    def __post_init__(self):
+        if self.connection_mode not in CONNECTION_MODES:
+            raise ValueError("connection_mode must be auto, usb_only, or bluetooth_only")
 
     @property
     def label(self) -> str:
@@ -59,6 +66,9 @@ class DeviceConfig:
             "device_id": self.device_id,
             "enabled": self.enabled,
         }
+        data["connection_mode"] = self.connection_mode
+        if self.maintenance is not None:
+            data["maintenance"] = dict(self.maintenance)
         if self.short_id:
             data["short_id"] = self.short_id
         if self.alias:
@@ -92,6 +102,8 @@ class DeviceConfig:
             macos_uuid=_optional_str(data.get("macos_uuid")),
             legacy=bool(data.get("legacy", False)),
             metadata=DeviceMetadata.from_json(data),
+            connection_mode=data.get("connection_mode", "auto"),
+            maintenance=data.get("maintenance") if isinstance(data.get("maintenance"), dict) else None,
         )
 
 
@@ -163,7 +175,9 @@ class DeviceRegistry:
 
     def upsert(self, device: DeviceConfig) -> None:
         for index, existing in enumerate(self.devices):
-            if existing.matches(device_id=device.device_id, short_id=device.short_id):
+            matches = (existing.device_id == device.device_id if is_full_device_id(existing.device_id)
+                       and is_full_device_id(device.device_id) else existing.matches(device_id=device.device_id, short_id=device.short_id))
+            if matches:
                 self.devices[index] = device
                 return
         self.devices.append(device)

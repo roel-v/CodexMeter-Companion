@@ -159,6 +159,7 @@ async def screen_policy_loop(
     poll_interval_sec: float = LOCK_POLL_INTERVAL_SEC,
     detector: MacLockDetector | WindowsLockDetector | None = None,
     connect_control_setter: Callable[[Payload | None], None] | None = None,
+    observation_observer=None,
 ) -> None:
     detector = detector or (WindowsLockDetector() if sys.platform == "win32" else MacLockDetector())
     policy = LockScreenPolicy(timeout_sec=timeout_sec)
@@ -168,6 +169,8 @@ async def screen_policy_loop(
         if locked is None:
             log.debug("Host lock state unavailable; keeping previous screen policy")
         else:
+            if observation_observer:
+                observation_observer(locked, time.monotonic())
             result = policy.observe(
                 locked,
                 now=time.monotonic(),

@@ -129,6 +129,7 @@ class BleIdentity:
     short_id: str
     name: str
     metadata: DeviceMetadata = DeviceMetadata()
+    raw: dict | None = field(default=None, compare=False)
 
     @classmethod
     def from_bytes(cls, raw: bytes | bytearray) -> "BleIdentity":
@@ -161,7 +162,7 @@ class BleIdentity:
             metadata = DeviceMetadata.from_json(data)
         except ValueError as exc:
             raise BleIdentityError(str(exc)) from exc
-        return cls(normalized_device_id, normalized_short_id, normalized_name, metadata)
+        return cls(normalized_device_id, normalized_short_id, normalized_name, metadata, data)
 
 
 class BleAckTracker:
@@ -191,51 +192,9 @@ class BleAckTracker:
         return self.last_text
 
 
-@dataclass
-class BleState:
-    last_usage: Payload | None = None
-    last_activity: Payload | None = None
-    last_payload: Payload | None = None
-    connect_control: Payload | None = None
-    desired_control: Payload | None = None
-    desired_settings: dict[str, Payload] = field(default_factory=dict)
-    pending_alert: Payload | None = None
-    observed_device_id: str | None = None
-    connected: bool = False
-    last_discovered_at: float | None = None
-    last_discovery_source: str | None = None
-    last_discovered_address: str | None = None
-    last_connected_at: float | None = None
-    last_disconnected_at: float | None = None
-    last_write_at: float | None = None
-    last_ack_at: float | None = None
-    consecutive_failures: int = 0
-    last_error: str | None = None
-
-    def status(self, queue_depth: int = 0, now: float | None = None) -> dict[str, Any]:
-        now = asyncio.get_running_loop().time() if now is None else now
-
-        def age(value: float | None) -> float | None:
-            if value is None:
-                return None
-            return round(max(0.0, now - value), 1)
-
-        return {
-            "connected": self.connected,
-            "queue_depth": queue_depth,
-            "last_discovered_age_sec": age(self.last_discovered_at),
-            "last_discovery_source": self.last_discovery_source,
-            "last_discovered_address": self.last_discovered_address,
-            "last_connected_age_sec": age(self.last_connected_at),
-            "last_disconnected_age_sec": age(self.last_disconnected_at),
-            "last_write_age_sec": age(self.last_write_at),
-            "last_ack_age_sec": age(self.last_ack_at),
-            "consecutive_failures": self.consecutive_failures,
-            "last_error": self.last_error,
-            "last_payload": self.last_payload.kind if self.last_payload else None,
-            "pending_alert": self.pending_alert.data.get("id") if self.pending_alert else None,
-            "observed_device_id": self.observed_device_id,
-        }
+# Compatibility name: state is owned by DeviceSlot, never by a connection.
+from .delivery import DeliveryState as BleState
+from .delivery import remember_accepted, remember_desired, should_send
 
 
 class BleTransport:
@@ -372,8 +331,15 @@ class BleTransport:
         from bleak.exc import BleakError
 
         refresh_requested = asyncio.Event()
+        import secrets
+        generation = secrets.token_hex(16)
+        state.generation = generation
+        state.transport = "bluetooth"
+        active = True
 
         def on_refresh(_char: Any, _data: bytearray) -> None:
+            if not active or state.generation != generation:
+                return
             log.info("Device requested a refresh")
             refresh_requested.set()
 
@@ -397,12 +363,14 @@ class BleTransport:
                 if identity_validator is not None:
                     identity_validator(identity)
                 state.observed_device_id = identity.device_id
+                if identity.raw and identity.raw.get('ble_owner') == 1:
+                    return await self._negotiated(client,identity,queue,state,stop_event)
             ack_tracker: BleAckTracker | None = BleAckTracker()
             try:
                 await self._start_notify(
                     client,
                     TX_CHAR_UUID,
-                    lambda char, data: self._on_ack(char, data, ack_tracker),
+                    lambda char, data: self._on_ack(char, data, ack_tracker) if active and state.generation == generation else None,
                 )
             except (BleakError, ValueError, BleNotifyError) as exc:
                 raise BleNotifyError("BLE ACK notifications unavailable") from exc
@@ -453,13 +421,14 @@ class BleTransport:
                     health_task = asyncio.create_task(
                         asyncio.sleep(self.healthcheck_interval_sec)
                     )
-                    done, pending = await asyncio.wait(
-                        {payload_task, refresh_task, stop_task, health_task},
-                        return_when=asyncio.FIRST_COMPLETED,
-                    )
-                    for task in pending:
-                        task.cancel()
-                    await asyncio.gather(*pending, return_exceptions=True)
+                    tasks = {payload_task, refresh_task, stop_task, health_task}
+                    try:
+                        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                    finally:
+                        for task in tasks:
+                            if not task.done():
+                                task.cancel()
+                        await asyncio.gather(*tasks, return_exceptions=True)
 
                     payload = payload_task.result() if payload_task in done else None
                     if payload is not None and payload.kind == "alert":
@@ -496,9 +465,42 @@ class BleTransport:
                 state.connected = False
                 state.last_disconnected_at = loop.time()
         finally:
+            active = False
             await self._disconnect(client, display)
             log.info("BLE disconnected from %s", display)
         return used_successfully
+
+    async def _negotiated(self, client, identity, queue, state, stop_event):
+        from types import SimpleNamespace
+        from .ble_session import BleSession
+        from .host_identity import load_host_id
+        from .usb_worker import UsbDeviceWorker
+        from .delivery import negotiated_replay
+        session=BleSession(client,identity,load_host_id())
+        delivery=UsbDeviceWorker(SimpleNamespace(state=state),None,'')
+        delivery.session=session
+        try:
+            await session.open()
+            state.connected=True;state.transport='bluetooth';state.generation=session.generation
+            state.last_connected_at=time.monotonic();state.last_error=None
+            state.device_state={**session.state,'boot':session.identity.boot}
+            while not queue.empty():
+                queue.get_nowait()
+            replay = negotiated_replay(state, same_host=session.state['same_host'])
+            hook = getattr(self, 'on_reconciled', None)
+            if hook:
+                await hook(delivery.slot, session)
+            for payload in replay:
+                await delivery._deliver(payload)
+            while client.is_connected and not stop_event.is_set() and not session.failure:
+                try: payload=await asyncio.wait_for(queue.get(),.1)
+                except TimeoutError:continue
+                await delivery._deliver(payload)
+            if session.failure:raise session.failure
+            return True
+        finally:
+            state.connected=False;state.last_disconnected_at=time.monotonic()
+            await session.close()
 
     async def connect_and_write(
         self,
@@ -586,6 +588,9 @@ class BleTransport:
         if payload.kind == "alert":
             state.pending_alert = payload
         await self._write_payload(client, payload, ack_tracker, state)
+        if payload.kind == "alert":
+            from .delivery import accepted_alert
+            accepted_alert(payload, state)
         if state.pending_alert is payload:
             state.pending_alert = None
 
@@ -602,28 +607,11 @@ class BleTransport:
 
     @staticmethod
     def _remember_payload(payload: Payload, state: BleState) -> None:
-        state.last_payload = payload
-        if payload.kind == "usage" and state.last_usage is None:
-            state.last_usage = payload
-        elif payload.kind == "activity" and state.last_activity is None:
-            state.last_activity = payload
-        elif payload.kind == "control":
-            if payload.data.get("cmd") in ("brightness", "rotation"):
-                state.desired_settings.setdefault(str(payload.data["cmd"]), payload)
-            elif state.desired_control is None:
-                state.desired_control = payload
+        return remember_accepted(payload, state)
 
     @staticmethod
     def remember_desired(payload: Payload, state: BleState) -> None:
-        if payload.kind == "usage":
-            state.last_usage = payload
-        elif payload.kind == "activity":
-            state.last_activity = payload
-        elif payload.kind == "control":
-            if payload.data.get("cmd") in ("brightness", "rotation"):
-                state.desired_settings[str(payload.data["cmd"])] = payload
-            else:
-                state.desired_control = payload
+        return remember_desired(payload, state)
 
     @staticmethod
     def _require_ack(payload: Payload, text: str) -> None:
@@ -635,22 +623,7 @@ class BleTransport:
             raise BleAckError(f"BLE NACK for {payload.kind}: {text}")
 
     def _should_write_payload(self, payload: Payload, state: BleState) -> bool:
-        if payload.kind == "alert":
-            timestamp = payload.data.get("t")
-            return type(timestamp) in (int, float) and 0 <= time.time() - timestamp <= 60
-        latest = state.last_usage if payload.kind == "usage" else state.last_activity if payload.kind == "activity" else None
-        if latest is not None and latest is not payload:
-            return False
-        if payload.kind == "control" and payload.data.get("cmd") in ("brightness", "rotation"):
-            desired = state.desired_settings.get(payload.data["cmd"])
-            return desired is None or desired is payload
-        if payload.kind != "control":
-            return True
-        if payload.data.get("cmd") != "screen":
-            return True
-        if payload.data.get("on") is True and state.connect_control is None:
-            return False
-        return True
+        return should_send(payload, state)
 
     def _on_ack(
         self,
