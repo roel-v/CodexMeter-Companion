@@ -93,4 +93,3 @@ class DeviceWorker:
             self.slot.config = replace(config, metadata=identity.metadata)
         if not identity.metadata.compatible:
             raise DeviceIdentityError(f"Unsupported display protocol {identity.metadata.protocol}; update the companion")
-

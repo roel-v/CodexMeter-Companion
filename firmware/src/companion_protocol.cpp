@@ -47,7 +47,7 @@ void Protocol::legacy_accepted(uint32_t now) { session.legacy(now); }
 bool Protocol::raw_allowed() const { return session.owner != Endpoint::Usb; }
 const char* Protocol::dispatch(Endpoint endpoint, const char* input, size_t size, uint32_t now) {
   reply_[0] = 0; tick(now);
-  if (size > 640 || size < 5 || memcmp(input, "CM1 ", 4) || !valid_utf8(input, size)) return reply_;
+  if (size > frame_limit || size < 5 || memcmp(input, "CM1 ", 4) || !valid_utf8(input, size)) return reply_;
   if (size >= 9 && !memcmp(input + 4, "DATA ", 5)) {
     // Header is parsed in bounded local storage, preserving the application's bytes.
     const char* cursor = input + 9;
@@ -61,8 +61,8 @@ const char* Protocol::dispatch(Endpoint endpoint, const char* input, size_t size
     if (!lower_hex(fields[0], 16) || !lower_hex(fields[1], 32) || !decimal(fields[2], seq)) return reply_;
     bool revision_valid = !strcmp(fields[3], "-") || decimal(fields[3], rev, true);
     size_t length = size - size_t(cursor - input);
-    if (!revision_valid || !length || length > 512) return reply_;
-    char payload[513];memcpy(payload,cursor,length);payload[length]=0;
+    if (!revision_valid || !length || length > payload_limit) return reply_;
+    char payload[payload_limit + 1];memcpy(payload,cursor,length);payload[length]=0;
     const char* error = strcmp(fields[0], boot_) ? "bad_boot" : session.check(endpoint, fields[1], now);
     if (!error) {
       error = session.sequence(seq, fields[3], payload);

@@ -35,3 +35,11 @@ Both workers now execute one attempt; DeviceCoordinator alone owns retry/selecti
 standalone backoff/jitter and their unused imports. Candidate disappearance ends an attempt. Bluetooth availability
 is in ble_availability.py; USB cleanup uses public discovery invalidation.
 Validation: 60 coordinator/discovery/recovery/follow-up tests passed; no references to removed retry modes remain.
+
+## Phase 5
+
+Parser frame/payload checks and its local buffer now use protocol_limits.h. A native test compiles the actual parser
+against production limits and a copied, isolated reduced-limit header (320/128) on D:. The reduced variant failed
+before the fix; both variants now pass, including oversize/no-effect, UTF-8, truncation and transaction replay checks.
+All three production firmware targets build successfully. Midpoint full Python suite: 409 passed in 25.47 seconds.
+D: had approximately 98 GB free; existing build/profile directories were inventoried and no data was moved.

@@ -14,3 +14,27 @@ try {
   & .\firmware_usb_protocol.exe
   if($LASTEXITCODE){throw 'Native firmware tests failed'}
 } finally {Pop-Location}
+
+# Compile the real parser twice, including an isolated smaller-limit variant.
+# The copied header is test-only; production sources and builds remain untouched.
+foreach($variant in @('production','reduced')) {
+  $variantRoot=Join-Path $out ('limits-'+$variant)
+  New-Item -ItemType Directory -Force $variantRoot | Out-Null
+  Copy-Item -Path (Join-Path $source '*.h') -Destination $variantRoot -Force
+  foreach($name in @('serial_protocol.cpp','companion_session.cpp','companion_protocol.cpp')) {
+    Copy-Item -LiteralPath (Join-Path $source $name) -Destination $variantRoot -Force
+  }
+  if($variant -eq 'reduced') {
+    $header=Join-Path $variantRoot 'protocol_limits.h'
+    $text=[IO.File]::ReadAllText($header).Replace('frame_limit = 640','frame_limit = 320').Replace('payload_limit = 512','payload_limit = 128')
+    [IO.File]::WriteAllText($header,$text)
+  }
+  Push-Location $variantRoot
+  try {
+    $compile='call "'+$VcVars+'" >nul && cl /nologo /std:c++17 /EHsc /W4 /D_CRT_SECURE_NO_WARNINGS /I"'+$repo+'\tests\firmware_native" /I"'+$variantRoot+'" /I"'+$json+'" "'+$repo+'\tests\firmware_protocol_limits.cpp" serial_protocol.cpp companion_session.cpp companion_protocol.cpp /Fe:limits.exe'
+    & cmd.exe /d /s /c $compile
+    if($LASTEXITCODE){throw 'Limit-test compile failed'}
+    & .\limits.exe
+    if($LASTEXITCODE){throw 'Parser boundary tests failed'}
+  } finally {Pop-Location}
+}
