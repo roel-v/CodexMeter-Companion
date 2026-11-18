@@ -88,3 +88,7 @@ reporting its model, validity and page. It contains no chat text. Model readback
 checks UI values/page and writes capture hashes in sidecars. `validation_capture.compare_crops` compares explicit
 metric regions against separately reviewed reference images. Captures are marked visual_review=pending until
 visually reviewed; never treat a successful transfer or model readback as completed pixel acceptance.
+
+Full-frame (PSRAM) diagnostic captures now use the same capacity-bounded writer as tiled C6 captures and include a
+CRC in the header. The host accepts both older four-field and new checksummed headers. This changes diagnostics,
+not the companion application protocol. A partial write cannot silently advance over unsent image bytes.

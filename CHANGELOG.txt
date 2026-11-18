@@ -7,7 +7,8 @@ recorded separately; firmware changes are noted where applicable.
 - Fix per-display manual control admission, separate lock policy from manual state, and expire stale unsent commands.
 - Prevent stale legacy Bluetooth telemetry replay; serialize maintenance with connection cleanup.
 - Keep retries in the coordinator and enforce declared firmware parser limits with native boundary tests.
-- Add isolated fixture input and UI-model/capture evidence; live candidate screenshot acceptance remains pending.
+- Add isolated fixture input and UI-model/capture evidence; verify task/token/cost pages on both displays over USB and Bluetooth.
+- Fix truncated Ball/original-S3 diagnostic screenshots by honoring USB write capacity and verifying full-frame CRC.
 - Detect incompatible Codex chat, quota, database and token formats independently.
 - Add persistent source-health details, one-time tray warnings and local diagnostic copying.
 - Notify once after five minutes of unexplained missing readings, with sleep/closed-Codex suppression.

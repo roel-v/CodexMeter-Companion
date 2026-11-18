@@ -1,6 +1,6 @@
 # Audit follow-up implementation notes
 
-Baseline commit: 2bb9d90 (audit and approved plan). Implementation is in progress, primary agent only.
+Baseline commit: 2bb9d90 (audit and approved plan). Implementation and authorized local deployment completed, primary agent only. Earlier sections retain their stage-specific status; final acceptance below closes the deployment gate.
 
 ## Phase 1
 
@@ -85,3 +85,68 @@ claimed. Do not move this item to done until required live acceptance passes. No
 
 Commits: baseline plan 2bb9d90; phase 1 91998d9; phase 2 07fe481; phase 3 5de6216;
 phase 4 b5393c5; phase 5 26bad4a; phase 6 342497f. Final build/documentation commit follows.
+
+## Authorized deployment and physical acceptance — 18 November 2026
+
+The user explicitly authorized installation, flashing both displays and all checks. The candidate executable was
+installed at dist/windows/CodexMeter.exe (same SHA256 as the retained candidate). Its predecessor is retained in
+validation/audit-follow-up-20261118/deployment/CodexMeter.before.exe. Initial and final device settings are recorded
+separately from synthetic values. Installed normal mode reported validation_mode=false; isolated fixtures reported true.
+Targeted CLI off, broadcast off/on and live tray/panel reuse/close-to-tray passed.
+
+Ball's complete previous app partition was read and hashed. C6 bulk and ROM reads failed before writing; the retained
+previous C6 application was then verified against live flash with esptool verify-flash and copied as the confirmed
+rollback image. Only app0 was replaced; settings, bootloader, partition table and artwork were preserved. All writes
+passed esptool verification. Failed reads and failed acceptance runs remain retained and are not counted as passes.
+
+Physical acceptance found two bounded issues:
+- Isolated fixture readiness still required a new live-producer acknowledgement before its producer started. Added
+  a failing regression, separated connection readiness from per-case ACK hashes/UI readback and allowed 60 seconds
+  for packaged launcher cleanup. Commit cf69852. The first run failed honestly; production was restored.
+- Ball full-frame capture ignored partial Serial.write counts, dropping bytes. Shared the existing bounded writer
+  across all boards and added a full-frame CRC with older-header host compatibility. Commit 439f57a. The failed Ball
+  capture is retained. All three firmware builds passed; corrected C6/Ball writes passed, and subsequent captures
+  passed checksums and model comparisons. Full Python regression: 423 passed in 23.54 seconds.
+
+Final firmware candidates are in candidate-capture-fixed; the unchanged executable remains at the evidence root.
+The hardware-capture-fixed matrix and reviewed-usb-reference.json contain the current capture evidence.
+Live matrix completion, freshness checks and final settings readback are still being collected below.
+
+The corrected full matrix completed with 54 passing assertions and 54 retained captures: 24 reviewed USB images,
+24 Bluetooth images whose metric regions match those references exactly, plus waiting/completion/recovery for
+both boards. Rejected-content checks compare real valid captures with incorrect task values and stale activity
+against their expected case and fail as required. Crop exclusions cover header indicators, reset countdown and
+animated footer only; metric labels, task values, totals, breakdowns and costs are included.
+
+Automatic USB failure/recovery on actual hardware passed using a source-side serial data interruption (not a
+physical cable unplug): detection 2.45 seconds on both; Bluetooth ACK after detection 5.66 seconds C6 / 10.39 Ball;
+USB ACK after restoration 4.45 / 4.77 seconds. Both retained boot/settings and the unaffected peer remained fresh.
+The exact packaged matrix separately verified normal USB/BLE/mixed modes, maintenance captures, manual controls
+across handover, waiting/recovery and settings restoration. Minimum-fragment protocol and 302-second freshness
+checks are running on both units; final live restoration remains to be recorded.
+
+## Final acceptance and restored production state
+
+Both protocol/freshness checks passed, including 512-byte payloads over 15-byte BLE fragments, ownership and
+legacy reclaim, cross-transport alert deduplication, settings preservation and manual-off/automatic-unlock behavior.
+After 302 seconds of keepalives without telemetry, both displays reported waiting: heartbeats do not extend data
+freshness. protocol-checks/summary.json records exit code zero for both boards and automatic fallback.
+
+Actual firmware readback rejected a deliberately wrong page expectation on both boards (live-negative-readback.json).
+The installed companion is back in normal mode (validation_mode=false), both devices connected over USB with fresh
+acknowledgements, maintenance released and original brightness, rotation, auto-rotation, selected page, manual power
+and automatic connection settings restored. installed-final.json records the post-check state. Native-size live-final-C6.png
+and live-final-Ball.png were inspected and show current task/quota/usage data, not fixture values.
+
+Final manifests: final-artifacts.json; firmware in candidate-capture-fixed; installed executable matches the retained
+candidate SHA256 9e2721d3009611845fc75c5df74aad18289a7ddb122c6560b7e3184b27f05921.
+Rollback images and failed attempts remain preserved. Evidence/build outputs are ignored and excluded from Git.
+
+Acceptance: 423 Python tests, native production/reduced-limit tests, all three firmware builds, standalone runtime
+and installed tray/CLI checks, 54 hardware matrix assertions/captures, explicit pixel/model negative checks, source-side
+automatic fallback fault injection and both real five-minute freshness tests passed. Original S3 is compile-only.
+Legacy protocol was exercised on current boards; older physical hardware remains simulated. No physical cable unplug,
+PC sleep/reboot, overnight soak, Bluetooth-less PC or more than two simultaneous units was tested. The fallback fault
+injection uses source sessions; the separate USB/BLE/mixed-mode matrix uses the exact packaged executable.
+
+All required gates are closed within the authorized scope. No push or release was requested or performed.

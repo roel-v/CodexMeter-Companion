@@ -2,7 +2,7 @@
 
 ## Status and baseline
 
-Implementation authorized 18 November 2026. Phases 1–6 implemented and committed; phase 7 unit/native/build/package checks passed. Live hardware acceptance remains a separate deployment gate.
+Completed 18 November 2026. All seven phases and the subsequently authorized local installation and C6/Ball hardware acceptance passed. See post-implementation notes for evidence and test limits. No publication was requested.
 Scope: all eight findings in [the follow-up audit](../../../docs/code-audit-2026-11-18-follow-up.md).
 Baseline: c4a89a0; audit and plan recorded in 2bb9d90. Existing regression baseline: 395 passing Python tests.
 
