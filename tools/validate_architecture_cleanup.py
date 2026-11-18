@@ -4,6 +4,7 @@ Uses an isolated profile and synthetic telemetry. Production is stopped graceful
 restored in finally; device settings are restored through identity-checked maintenance.
 """
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -14,6 +15,7 @@ from pathlib import Path
 from validate_usb_package import Fixture, IDS, PORTS, ROOT
 
 class CleanupFixture(Fixture):
+    validation_mode = True
     def control(self, index, command, value):
         result = self.event({'type':'device_control','device_id':IDS[index],'command':command,'value':value})
         assert result['ok'], result
@@ -27,13 +29,21 @@ class CleanupFixture(Fixture):
         raise AssertionError(f'Control did not apply: {index} {command}={value}')
 
     def feed_capture(self, label, payloads, pages=False):
+        from validation_capture import expected_model
+        from codexmeter.payloads import Payload
+        payloads = [dict(data, t=int(time.time())) for data in payloads]
+        expected = expected_model(payloads)
+        expected_path = self.out/f'{label}-expected.json'
+        expected_path.write_text(json.dumps(expected, indent=2), encoding='utf-8')
+        hashes = {data['k']: hashlib.sha256(Payload(data['k'],data).to_json_bytes()).hexdigest() for data in payloads}
         stop = threading.Event()
         errors = []
         def feed():
             while not stop.is_set():
                 try:
                     for data in payloads:
-                        self.event({'type':'usage', 'payload':dict(data, t=int(time.time()))})
+                        response=self.event({'type':'validation_payload', 'payload':data})
+                        if not response.get('ok'):raise ValueError(response)
                 except Exception as exc:
                     errors.append(type(exc).__name__)
                     return
@@ -41,17 +51,23 @@ class CleanupFixture(Fixture):
         worker = threading.Thread(target=feed)
         worker.start()
         try:
-            time.sleep(.6)
             for index in range(2):
                 self.wait(dict.fromkeys(IDS,self.capture_transport))
-                time.sleep(.6)
-                if pages:
-                    env=dict(self.env);env['PYTHONPATH']=str(ROOT)
-                    args=[sys.executable,str(ROOT/'tools/capture_validation_pages.py'),PORTS[index],str(self.out/f'{label}-{index}'),'--device-id',IDS[index]]
-                    if index==0:args.append('--c6')
-                    result=subprocess.run(args,env=env,cwd=self.home,capture_output=True,text=True,timeout=100,creationflags=subprocess.CREATE_NO_WINDOW)
-                    self.record(f'page_files_{label}_{index}',result.returncode==0,stderr=result.stderr)
-                else:self.capture(label,index)
+                deadline=time.monotonic()+15
+                while time.monotonic()<deadline:
+                    row=next(d for d in self.devices() if d['device_id']==IDS[index])
+                    if row.get('accepted_hashes')==hashes:break
+                    if errors:raise RuntimeError(errors)
+                    time.sleep(.1)
+                else:raise TimeoutError('Missing independent fixture acknowledgements')
+                env=dict(self.env);env['PYTHONPATH']=str(ROOT)
+                args=[sys.executable,str(ROOT/'tools/capture_validation_pages.py'),PORTS[index],str(self.out/f'{label}-{index}'),'--device-id',IDS[index],'--expected',str(expected_path)]
+                if index==0:args.append('--c6')
+                if not pages:args.append('--overview-only')
+                result=subprocess.run(args,env=env,cwd=self.home,capture_output=True,text=True,timeout=100,creationflags=subprocess.CREATE_NO_WINDOW)
+                self.record(f'page_files_{label}_{index}',result.returncode==0,stderr=result.stderr,
+                            device_id=IDS[index],transport=self.capture_transport,accepted_hashes=hashes,expected=expected,
+                            visual_review='pending')
             assert not errors,errors
         finally:
             stop.set();worker.join(15)
@@ -74,7 +90,7 @@ class CleanupFixture(Fixture):
                 self.capture_transport=transport
                 current={d['device_id']:{k:d.get(k) for k in ('model','firmware','protocol','width','height','capabilities')} for d in rows}
                 self.record('identity_'+transport,current==reference,metadata=current)
-                for label,counts,chats in ([] if self.args.details_only else [('known',(2,3,4),True),('unknown',(None,None,None),False),('partial',(2,None,None),False)]):
+                for label,counts,chats in ([] if self.args.details_only else [('known',(2,3,4),True),('unknown',(None,None,None),False),('partial',(2,None,None),False),('unknown-running',(None,3,4),True),('unknown-waiting',(2,None,4),True),('unknown-done',(2,3,None),True)]):
                     if self.args.partial_only and label != 'partial':
                         continue
                     data=dict(activity,run=counts[0],wait=counts[1],done=counts[2],chats=chats)
@@ -106,8 +122,12 @@ class CleanupFixture(Fixture):
             self.capture_transport='usb'
             self.feed_capture('recovered',[usage,activity])
         finally:
+            restoration_error = None
             try:
                 if self.proc:self.restore_settings()
+            except Exception as exc:
+                restoration_error = exc
+                # Preserve failure while still checking the restored production process.
             finally:
                 self.stop()
                 subprocess.Popen([str(self.args.original.resolve()),'--daemon'],cwd=self.args.original.resolve().parent,env=os.environ.copy(),stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.CREATE_NEW_PROCESS_GROUP)
@@ -120,6 +140,8 @@ class CleanupFixture(Fixture):
                 except (OSError,ValueError):pass
                 time.sleep(1)
             else:raise RuntimeError('Production did not reconnect after acceptance')
+            if restoration_error is not None:
+                self.record('settings_restoration_failed',False,error=str(restoration_error))
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)

@@ -229,8 +229,10 @@ class EventServer:
         open_control_panel: Callable[[], None] | None = None,
         device_controller=None,
         device_operator=None,
+        validation_mode: bool = False,
     ) -> None:
         self.sink = sink
+        self.validation_mode = validation_mode
         self.socket_path = socket_path
         self.status_provider = status_provider
         self.open_control_panel = open_control_panel
@@ -257,15 +259,7 @@ class EventServer:
         self.stop_event = stop_event
         self.server, self.auth_token = await ipc.start_server(self._handle_client, self.socket_path)
         log.info("Listening for Codex events on %s", self.socket_path)
-        background_tasks = [
-            asyncio.create_task(self.transcripts.run(stop_event), name="transcripts")
-        ]
-        if self.activity_ttl > 0:
-            background_tasks.append(
-                asyncio.create_task(
-                    self._activity_ttl_loop(stop_event), name="activity-ttl"
-                )
-            )
+        background_tasks = self.background_tasks(stop_event)
         try:
             async with self.server:
                 await stop_event.wait()
@@ -278,6 +272,20 @@ class EventServer:
                 await self.server.wait_closed()
             if self.socket_path.exists():
                 self.socket_path.unlink()
+
+    def background_tasks(self, stop_event: asyncio.Event) -> list[asyncio.Task]:
+        if self.validation_mode:
+            return []
+        tasks = [
+            asyncio.create_task(self.transcripts.run(stop_event), name="transcripts")
+        ]
+        if self.activity_ttl > 0:
+            tasks.append(
+                asyncio.create_task(
+                    self._activity_ttl_loop(stop_event), name="activity-ttl"
+                )
+            )
+        return tasks
 
     async def _handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -307,6 +315,14 @@ class EventServer:
 
     async def _dispatch(self, event: dict[str, Any]) -> dict[str, Any]:
         event_type = event.get("type")
+        if self.validation_mode and event_type in ("activity", "task_start", "task_finish", "task_complete", "usage"):
+            raise ValueError("Live telemetry events are disabled in validation mode")
+        if event_type == "validation_payload":
+            if not self.validation_mode:
+                raise ValueError("Validation input requires an isolated validation daemon")
+            payload = self._telemetry_payload(event.get("payload"))
+            await self.sink(payload)
+            return {"ok": True, "queued": payload.kind}
         if event_type in ('device_registry_update', 'devices_reload', 'device_mode', 'maintenance_acquire', 'maintenance_release', 'maintenance_resume'):
             if self.device_operator is None:
                 raise ValueError('Device operations unavailable')
@@ -359,12 +375,22 @@ class EventServer:
             return await self._dispatch_activity(event)
         if event_type == "usage":
             payload_obj = event.get("payload")
-            if not isinstance(payload_obj, dict):
-                raise ValueError("usage event requires a payload object")
-            await self.sink(Payload("usage", payload_obj))
+            payload = self._telemetry_payload(payload_obj, expected_kind="usage")
+            await self.sink(payload)
             log.info("Queued local usage payload")
             return {"ok": True, "queued": "usage"}
         raise ValueError(f"unknown event type: {event_type!r}")
+
+    @staticmethod
+    def _telemetry_payload(data, expected_kind=None) -> Payload:
+        if not isinstance(data, dict) or type(data.get("v")) is not int or data["v"] != 1:
+            raise ValueError("Telemetry requires a version 1 payload object")
+        kind = data.get("k")
+        if kind not in ("usage", "activity") or (expected_kind and kind != expected_kind):
+            raise ValueError("Telemetry payload kind does not match its event")
+        payload = Payload(kind, dict(data))
+        payload.to_json_bytes()  # Bound size and validate serialization before admission.
+        return payload
 
     async def _dispatch_activity(self, event: dict[str, Any]) -> dict[str, Any]:
         event_type = event.get("type")

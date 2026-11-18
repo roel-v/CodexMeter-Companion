@@ -47,3 +47,6 @@ void ui_set_volume(int percent);
 int ui_volume();
 
 #endif
+
+// Read-only snapshot of the model consumed by the UI; maintenance diagnostics only.
+void ui_validation_state(Print& output);

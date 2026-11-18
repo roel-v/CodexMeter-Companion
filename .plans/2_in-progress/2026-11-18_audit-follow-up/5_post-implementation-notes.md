@@ -43,3 +43,19 @@ against production limits and a copied, isolated reduced-limit header (320/128) 
 before the fix; both variants now pass, including oversize/no-effect, UTF-8, truncation and transaction replay checks.
 All three production firmware targets build successfully. Midpoint full Python suite: 409 passed in 25.47 seconds.
 D: had approximately 98 GB free; existing build/profile directories were inventoried and no data was moved.
+
+## Phase 6 (implementation; hardware acceptance pending)
+
+Validation IPC now checks payload version and semantic kind before enqueueing. An explicit --validation-mode
+requires a disposable profile marker; it disables quota, chat, transcript, activity TTL, compatibility, pricing and
+update producers. Normal startup remains live. Typed fixture injection preserves independent usage/activity records.
+Per-kind ACK hashes and a maintenance-only UI model/page diagnostic gate capture; expected values and image hashes
+are retained in sidecars. Wrong values/pages, missing activity and valid PNGs with changed metric pixels have
+negative tests. Captures remain marked visual_review=pending until independently reviewed; CRC is not content proof.
+Restoration errors survive production reconnection checks. The fixture retains immutable timestamps while feeding.
+
+Validation: full Python suite before final negative tests: 411 passed. Focused content/capture/follow-up suite: 27
+passed. Firmware and standalone builds are in progress. No live app shutdown, installation or flashing performed.
+Read-only diagnostic reports UI model inputs after forcing refresh; it does not claim to verify raster pixels.
+Pixel comparison requires explicit crops and a separately reviewed reference. Live capture/review is phase 7's
+separately authorized deployment gate, not a completed acceptance claim.

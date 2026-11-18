@@ -774,6 +774,8 @@ static void handle_raw_line(const char* buf) {
         device_log_heap("serial");
       } else if (strcmp(buf, "lvheap") == 0) {
         log_lvgl_mem("serial");
+      } else if (strcmp(buf, "validation_state") == 0) {
+        ui_validation_state(Serial);
       } else if (strcmp(buf, "health") == 0) {
         uint32_t now = millis();
         uint32_t host_age =

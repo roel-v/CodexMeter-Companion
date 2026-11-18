@@ -285,6 +285,9 @@ def build_stale_usage_payload(payload: Payload, now: int | None = None) -> Paylo
 
 
 async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -> None:
+    validation_mode = getattr(args, "validation_mode", False)
+    if validation_mode and not (APP_DIR / ".validation-profile").is_file():
+        raise ValueError("Validation mode requires a disposable profile marker")
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
 
@@ -366,7 +369,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         from .bluetooth_recovery import BluetoothRecovery
         recovery = BluetoothRecovery(manager.bluetooth_status)
         manager.discovery.after_scan = recovery.observe
-    chats = ChatActivity(monitor=monitor) if sys.platform == "win32" else None
+    chats = ChatActivity(monitor=monitor) if sys.platform == "win32" and not validation_mode else None
     await manager.broadcast(chats.payload if chats else build_activity_payload(0))
 
     async def sink(payload: Payload) -> None:
@@ -384,7 +387,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             if device["metric_validity"] != "supported":
                 device["metric_validity_note"] = (
                     "Update display firmware for correct unknown/partial task counts. Older Ball firmware may show zero.")
-        status = {"devices": snapshot, "compatibility": monitor.snapshot()}
+        status = {"devices": snapshot, "compatibility": monitor.snapshot(), "validation_mode": validation_mode}
         if recovery is not None:
             status["bluetooth_recovery"] = recovery.status()
         if chats is not None:
@@ -433,6 +436,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         open_control_panel=desktop.open_control_panel if desktop is not None else None,
         device_controller=manager.control_device,
         device_operator=manager.device_operation,
+        validation_mode=validation_mode,
     )
 
     await supervise(
@@ -441,12 +445,12 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             **({"diagnostics": diagnostics.heartbeat(stop_event, desktop)} if diagnostics else {}),
             **({"chat_activity": chats.run(manager.broadcast, stop_event)} if chats else {}),
             **({"tray_status": tray_status_loop()} if desktop is not None else {}),
-            "compatibility": compatibility_loop(),
-            "power_events": power_event_loop(monitor, stop_event),
+            **({"compatibility": compatibility_loop(),
+                "power_events": power_event_loop(monitor, stop_event)} if not validation_mode else {}),
             "events": event_server.run(stop_event),
-            "quota": quota_loop(provider, sink, stop_event, args.poll_interval),
-            "pricing": pricing_monitor_loop(stop_event, desktop),
-            "updates": update_monitor_loop(stop_event, desktop),
+            **({"quota": quota_loop(provider, sink, stop_event, args.poll_interval),
+                "pricing": pricing_monitor_loop(stop_event, desktop),
+                "updates": update_monitor_loop(stop_event, desktop)} if not validation_mode else {}),
             "screen_policy": screen_policy_loop(
                 sink,
                 stop_event,
@@ -486,6 +490,7 @@ def build_file_handler(
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the CodexMeter host daemon.")
+    parser.add_argument("--validation-mode", action="store_true", help="Isolated fixture profile only; disables live telemetry producers")
     parser.add_argument("--codex-bin", default="codex")
     parser.add_argument("--timeout", type=float, default=15.0)
     parser.add_argument("--poll-interval", type=int, default=POLL_INTERVAL_SEC)

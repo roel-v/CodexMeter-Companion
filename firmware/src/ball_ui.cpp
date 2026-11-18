@@ -174,4 +174,12 @@ void ui_set_display_active(bool value) { active=value;if(!active) ui_dismiss_ale
 void ui_dismiss_alert() {alert_visible=false;flash_step=-1;reveal_pending=false;visible(alert_panel,false);}
 bool ui_alert_visible() { return alert_visible; }
 int ui_page() { return page; }
+
+#include "validation_view.h"
+void ui_validation_state(Print& output) {
+  refresh();
+  lv_refr_now(nullptr);
+  print_validation_view(output, usage, activity, ui_page(), ui_is_waiting());
+}
+
 #endif

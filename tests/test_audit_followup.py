@@ -190,3 +190,29 @@ def test_maintenance_unknown_outcome_is_not_treated_as_unsent():
             with pytest.raises(UnknownDelivery): await s.try_maintenance()
         finally: await s.close(release=False)
     asyncio.run(run())
+
+
+def test_usage_rejects_semantic_kind_mismatch():
+    async def run():
+        sent=[]
+        async def sink(p): sent.append(p)
+        server=EventServer(sink)
+        for payload in ({'v':1,'k':'activity','run':2},{'v':1,'k':'control'},{'v':2,'k':'usage'}):
+            with pytest.raises(ValueError): await server._dispatch({'type':'usage','payload':payload})
+        assert sent==[]
+    asyncio.run(run())
+
+
+def test_validation_input_is_opt_in_and_preserves_both_kinds():
+    async def run():
+        sent=[]
+        async def sink(p): sent.append(p)
+        event={'type':'validation_payload','payload':{'v':1,'k':'activity','run':2}}
+        with pytest.raises(ValueError): await EventServer(sink)._dispatch(event)
+        server=EventServer(sink,validation_mode=True)
+        await server._dispatch(event)
+        await server._dispatch({'type':'validation_payload','payload':{'v':1,'k':'usage','td':42}})
+        assert [p.kind for p in sent]==['activity','usage']
+        with pytest.raises(ValueError): await server._dispatch({'type':'activity','count':99})
+        assert server.background_tasks(asyncio.Event())==[]
+    asyncio.run(run())

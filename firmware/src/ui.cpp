@@ -1077,3 +1077,10 @@ int ui_volume() {
   return device_settings_get().volume_percent;
 }
 int ui_page() { return token_detail_page ? (token_detail_week ? 2 : 1) : 0; }
+
+#include "validation_view.h"
+void ui_validation_state(Print& output) {
+  refresh_dashboard_model(millis());
+  lv_refr_now(nullptr);
+  print_validation_view(output, app_usage, app_activity, ui_page(), ui_is_waiting());
+}

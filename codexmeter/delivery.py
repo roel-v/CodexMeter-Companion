@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import asyncio
+import hashlib
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -16,6 +17,7 @@ EXPLICIT_INTENT_TTL_SEC = 60
 
 @dataclass
 class DeliveryState:
+    accepted_hashes: dict[str, str] = field(default_factory=dict)
     observed_at: dict[str, float] = field(default_factory=dict)
     alerts: list[tuple[float, Payload]] = field(default_factory=list)
     explicit_intents: dict[int, tuple[str, int, float]] = field(default_factory=dict)
@@ -55,6 +57,7 @@ class DeliveryState:
             return round(max(0.0, now - value), 1)
 
         return {
+            "accepted_hashes": dict(self.accepted_hashes),
             "connected": self.connected,
             "connection_state": self.connection_state,
             "fallback_reason": self.fallback_reason,
@@ -82,6 +85,8 @@ class DeliveryState:
 
 def remember_accepted(payload: Payload, state: DeliveryState) -> None:
     state.last_payload = payload
+    if payload.kind in ("usage", "activity"):
+        state.accepted_hashes[payload.kind] = hashlib.sha256(payload.to_json_bytes()).hexdigest()
     if payload.kind == "usage" and state.last_usage is None:
         state.last_usage = payload
     elif payload.kind == "activity" and state.last_activity is None:

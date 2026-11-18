@@ -17,6 +17,7 @@ def redacted(value):
     if isinstance(value,list):return [redacted(x) for x in value]
     return value
 class Fixture:
+    validation_mode = False
     def __init__(self,args):
         self.args=args;self.out=args.output.resolve();self.out.mkdir(parents=True,exist_ok=True)
         self.home=args.home.resolve();self.app=self.home/'.codexmeter';self.app.mkdir(parents=True,exist_ok=True)
@@ -43,7 +44,8 @@ class Fixture:
         s=self.status();return s.get('devices',{}).get('devices',[])
     def wait(self,wanted,timeout=65):
         start=time.monotonic();last=[]
-        self.event({'type':'activity','count':2})
+        if not self.validation_mode:
+            self.event({'type':'activity','count':2})
         while time.monotonic()-start<timeout:
             try:
                 last=self.devices();found={d['device_id']:d for d in last}
@@ -56,8 +58,10 @@ class Fixture:
         response=self.event({'type':'device_mode','device_id':IDS[index],'connection_mode':mode})
         if response.get('ok') is not True:raise RuntimeError(response)
     def start(self):
+        if self.validation_mode:
+            (self.app/'.validation-profile').touch()
         self.log=(self.out/'candidate-daemon.log').open('a',encoding='utf-8')
-        self.proc=subprocess.Popen([str(self.binary),'--daemon','--foreground','--codex-bin',str(self.home/'no-codex.exe'),'--poll-interval','3600','--scan-timeout','3','--scan-interval','2'],env=self.env,cwd=self.home,stdout=self.log,stderr=self.log,creationflags=subprocess.CREATE_NO_WINDOW)
+        self.proc=subprocess.Popen([str(self.binary),'--daemon','--foreground',*(['--validation-mode'] if self.validation_mode else []),'--codex-bin',str(self.home/'no-codex.exe'),'--poll-interval','3600','--scan-timeout','3','--scan-interval','2'],env=self.env,cwd=self.home,stdout=self.log,stderr=self.log,creationflags=subprocess.CREATE_NO_WINDOW)
         deadline=time.monotonic()+30
         while time.monotonic()<deadline:
             try:self.status();break
