@@ -2,9 +2,9 @@
 
 ## Status and baseline
 
-Planning requested 18 November 2026. Implementation has not started.
+Implementation authorized 18 November 2026. Phases 1–6 implemented and committed; phase 7 unit/native/build/package checks passed. Live hardware acceptance remains a separate deployment gate.
 Scope: all eight findings in [the follow-up audit](../../../docs/code-audit-2026-11-18-follow-up.md).
-Baseline: c4a89a0; the audit report is currently untracked. Existing regression baseline: 395 passing Python tests.
+Baseline: c4a89a0; audit and plan recorded in 2bb9d90. Existing regression baseline: 395 passing Python tests.
 
 This is bounded fix-forward work after
 [architecture cleanup](../../3_done/2026-11-18_architecture-cleanup/1_exploration.md).
@@ -16,7 +16,7 @@ Keep USB/Bluetooth fallback, legacy BLE/rollback, current Windows/macOS support,
 current layouts/themes, settings, pricing history and compatibility monitoring. Keep-awake and MCP remain separate.
 No new wire protocol version, release numbering policy, automatic restart, installer or network service.
 
-This request authorizes planning only. Implementation, deployment and publication are separate actions.
+The subsequent user request authorizes implementation and staged commits. Deployment and publication remain separate actions.
 On subsequent implementation authorization, follow the standing instruction: grouped baseline commits first,
 then focused commits after each verified fix. Do not push or publish without a request.
 

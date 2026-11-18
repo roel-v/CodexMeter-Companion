@@ -153,3 +153,16 @@ absence of defects. Physical sleep/resume, original S3 hardware, a Bluetooth-les
 not tested here. Legacy BLE/rollback support and existing C6 themes remain intentional supported functionality.
 
 No fixes or commits were made. This report is the only repository addition from the audit.
+
+## Follow-up disposition — 18 November 2026
+
+The implementation is tracked in `.plans/2_in-progress/2026-11-18_audit-follow-up`.
+Findings 1/2/5: per-target manual admission, separate policy/manual coalescing, eviction cleanup and final-lock TTL
+checks (91998d9). Finding 3: production legacy GATT replay/refresh/health freshness (07fe481).
+Finding 4: serialized lifecycle acquisition, definitely-unsent fallback and bounded maintenance (5de6216).
+Finding 7: coordinator-only retry and BLE-owned availability (b5393c5). Finding 6: owned parser constants with
+production/reduced-limit native dispatch tests (26bad4a).
+Finding 8: isolated typed fixture producers, independent ACK evidence, UI model/page readback and negative pixel
+checks are implemented. Actual C6/Ball capture review on the candidate is pending the separate deployment gate.
+This disposition does not retroactively validate the previous screenshots. See the work item's notes for exact
+build/test evidence and remaining acceptance; it is intentionally still in progress.

@@ -67,3 +67,24 @@ Manual screen commands: `screen-on` / `screen-off` broadcast to registered displ
 They return per-device admission results; disabled, disconnected or maintenance targets are rejected. Partial failure
 returns a nonzero exit status. A queued response is not an application acknowledgement. Only `--reason manual` is
 accepted; automatic OS lock policy is internal and remains independent of manual screen state.
+
+### Audit follow-up verification (18 November 2026)
+
+The companion admits manual controls per device, preserving separate manual and automatic policy state.
+Negotiated explicit commands carry their original 60-second deadline to the serialized first write. Legacy
+telemetry replay uses producer freshness, including refresh and health paths. Workers perform one attempt;
+the coordinator owns retries and fencing. Maintenance acquisition and close serialize through a session lifecycle
+lock. A definitely-unsent stale session permits fresh verified USB acquisition; an uncertain sent request retains
+its durable maintenance pause. The operation deadline is 12 seconds; maintenance IPC allows 20 seconds.
+
+For synthetic capture, start a disposable profile with `.codexmeter/.validation-profile` and `--validation-mode`.
+This is a startup option, not a production IPC toggle. `validation_payload` accepts version-1 usage/activity only;
+normal usage IPC also checks its wire kind. Live telemetry and network monitors are disabled in validation mode.
+Status reports validation_mode and independent accepted_hashes for usage/activity (at most two hashes).
+The raw `validation_state` diagnostic follows existing maintenance ownership rules and refreshes the UI before
+reporting its model, validity and page. It contains no chat text. Model readback does not prove raster content.
+
+`validate_architecture_cleanup.py` records expected values and ACK hashes; `capture_validation_pages.py --expected`
+checks UI values/page and writes capture hashes in sidecars. `validation_capture.compare_crops` compares explicit
+metric regions against separately reviewed reference images. Captures are marked visual_review=pending until
+visually reviewed; never treat a successful transfer or model readback as completed pixel acceptance.

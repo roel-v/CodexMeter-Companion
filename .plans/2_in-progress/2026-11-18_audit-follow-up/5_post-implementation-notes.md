@@ -59,3 +59,29 @@ passed. Firmware and standalone builds are in progress. No live app shutdown, in
 Read-only diagnostic reports UI model inputs after forcing refresh; it does not claim to verify raster pixels.
 Pixel comparison requires explicit crops and a separately reviewed reference. Live capture/review is phase 7's
 separately authorized deployment gate, not a completed acceptance claim.
+
+## Phase 7 — Build/package verification; deployment gate open
+
+- Full Python suite: **419 passed** (33.32 seconds), using D: test scratch.
+- Native firmware core/protocol and real parser boundary tests: passed at 640/512 and 320/128 limits.
+- Production firmware: C6 and Ball passed; original S3 passed on recheck after correcting the Ball-only guard
+  around the new diagnostic. The first failing build log is preserved, not presented as a passing build.
+- Standalone Nuitka onefile built successfully with pinned dependencies. Isolated profile on D:, no Python/source
+  on child PATH: compiled runtime, real Tk panels/workers, tray icon/menu/click/quit, DPAPI, WinRT, child CLI passed.
+  CLI missing-daemon and policy-spoof rejection paths passed. Help forwarding initially needed --foreground;
+  corrected test passed. No installed app or device settings were changed.
+- Retained evidence: dist/windows/validation/audit-follow-up-20261118 (ignored).
+  CodexMeter.exe; C6/Ball app + factory binaries; original-S3 app binary; SHA256 manifest; test/build logs;
+  runtime-self-test.json and isolated-cli-checks.json. Build source includes phase 6 commit 342497f.
+- Versus phase 5, C6 static RAM +16 bytes / flash +3242 bytes; Ball static RAM unchanged / flash +4328 bytes.
+  No dependency additions or protocol version change. Original S3 remains compile-only.
+
+Remaining required gate: install candidate app and flash C6/Ball under the plan's separate local deployment
+permission; run the real USB/BLE fixture, packaged validation-mode startup, positive manual controls, freshness,
+maintenance, waiting/recovery/completion, native-size content review and explicit crop/reference comparisons;
+restore settings and real telemetry. No screenshots from the older run are reused as proof of this candidate.
+Legacy hardware behavior is simulated; physical sleep, the user's Bluetooth-less PC and longer soak are not
+claimed. Do not move this item to done until required live acceptance passes. No push or release was requested.
+
+Commits: baseline plan 2bb9d90; phase 1 91998d9; phase 2 07fe481; phase 3 5de6216;
+phase 4 b5393c5; phase 5 26bad4a; phase 6 342497f. Final build/documentation commit follows.

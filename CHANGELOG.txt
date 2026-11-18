@@ -4,6 +4,10 @@ Entries are grouped by release date, newest first. Application versions are
 recorded separately; firmware changes are noted where applicable.
 
 2026-11-18 — unreleased compatibility and architecture cleanup (Windows and firmware 3.12.3.4)
+- Fix per-display manual control admission, separate lock policy from manual state, and expire stale unsent commands.
+- Prevent stale legacy Bluetooth telemetry replay; serialize maintenance with connection cleanup.
+- Keep retries in the coordinator and enforce declared firmware parser limits with native boundary tests.
+- Add isolated fixture input and UI-model/capture evidence; live candidate screenshot acceptance remains pending.
 - Detect incompatible Codex chat, quota, database and token formats independently.
 - Add persistent source-health details, one-time tray warnings and local diagnostic copying.
 - Notify once after five minutes of unexplained missing readings, with sleep/closed-Codex suppression.

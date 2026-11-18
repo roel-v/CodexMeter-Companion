@@ -246,3 +246,8 @@ Firmware theme libraries remain required by C6/original S3. This cleanup removes
 Earlier unit-only evidence did not establish real lifecycle wiring. The cleanup adds production-path tests and native
 power registration; physical PC sleep is still not tested. Full test/build/device results and any limits are recorded
 in the architecture-cleanup work item's post-implementation notes. Publishing is a separate action.
+
+Follow-up correction (18 November 2026): the subsequent audit reproduced remaining manual-control, freshness,
+maintenance and fixture gaps. The disposition above is historical, not proof these were already covered.
+See [follow-up findings and disposition](code-audit-2026-11-18-follow-up.md) and the in-progress follow-up plan.
+Earlier screenshot CRCs established transfer integrity only; they did not establish the intended synthetic values.
