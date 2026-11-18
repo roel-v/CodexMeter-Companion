@@ -7,7 +7,7 @@ import argparse,asyncio,json,sys,time
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from codexmeter import usb_transport as usb
-from codexmeter.device_registry import DeviceRegistry
+from fixture_registry import isolated_registry
 from codexmeter.device_manager import DeviceManager
 from codexmeter.payloads import build_activity_payload
 def fixture_activity():
@@ -15,6 +15,17 @@ def fixture_activity():
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 IDS=['codexmeter-00e216f16e20','codexmeter-6867f4697090'];PORTS=['COM6','COM9']
 async def run(args):
+    # Never persist maintenance markers into a deployment snapshot or real profile.
+    with isolated_registry(args.registry, getattr(args, 'scratch_root', None)) as registry:
+        original = usb.open_serial
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            await run_registry(args, registry)
+        finally:
+            usb.open_serial = original
+
+
+async def run_registry(args, registry):
     blocked=set();original=usb.open_serial;records=[]
     class Boundary:
         def __init__(self,handle,port):self.handle,self.port=handle,port
@@ -27,7 +38,7 @@ async def run(args):
             return self.handle.write(data)
     def opening(port,**kwargs):return Boundary(original(port,**kwargs),port)
     usb.open_serial=opening
-    registry=DeviceRegistry.load(args.registry);configs=registry.devices
+    configs=registry.devices
     manager=DeviceManager(configs,connect_timeout_sec=5,disconnect_timeout_sec=.5,write_timeout_sec=2,ack_timeout_sec=2,notify_timeout_sec=2,healthcheck_interval_sec=45,scan_timeout_sec=3,scan_interval_sec=2,host_id='e'*32,registry=registry)
     stop=asyncio.Event();task=asyncio.create_task(manager.run(stop))
     async def producer():
@@ -81,4 +92,4 @@ async def run(args):
         finally:
             producing.cancel();await asyncio.gather(producing,return_exceptions=True);usb.open_serial=original
 if __name__=='__main__':
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('registry',type=Path);p.add_argument('output',type=Path);asyncio.run(run(p.parse_args()))
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('registry',type=Path);p.add_argument('output',type=Path);p.add_argument('--scratch-root',type=Path);asyncio.run(run(p.parse_args()))
