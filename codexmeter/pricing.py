@@ -6,6 +6,7 @@ import datetime as dt
 import hashlib
 import json
 import re
+import threading
 import urllib.request
 from decimal import Decimal
 from pathlib import Path
@@ -16,6 +17,10 @@ from .settings import APP_DIR
 SOURCE_URL = "https://developers.openai.com/api/docs/pricing.md"
 PUBLIC_URL = "https://developers.openai.com/api/docs/pricing"
 PRICING_DIR = APP_DIR / "pricing"
+
+# All writers are threads in the single companion process. Network I/O stays outside.
+_STORE_LOCK = threading.RLock()
+_CHECKS = {}
 
 
 def fingerprint(text: str) -> str:
@@ -69,6 +74,7 @@ def parse_prices(text: str) -> dict:
 class PricingStore:
     def __init__(self, root: Path = PRICING_DIR):
         self.root = root
+        self._key = str(root.resolve()).casefold()
 
     def revisions(self):
         from .pricing_seed import SEED
@@ -91,9 +97,12 @@ class PricingStore:
 
     def check(self, *, force=False, fetch=None, now=None):
         now = now or dt.datetime.now(dt.timezone.utc)
-        previous = self.status()
-        if not force and now.timestamp() - previous.get("checked_at", 0) < 86400:
-            return previous
+        with _STORE_LOCK:
+            previous = self.status()
+            if not force and 0 <= now.timestamp() - previous.get("checked_at", 0) < 86400:
+                return previous
+            ticket = object()
+            _CHECKS[self._key] = ticket
         try:
             if fetch is None:
                 request = urllib.request.Request(SOURCE_URL, headers={"User-Agent": "CodexMeter pricing-check/1"})
@@ -107,59 +116,72 @@ class PricingStore:
             else:
                 text = fetch()
             digest = fingerprint(text)
-            latest = self.revisions()[-1]
             candidate = {"source": SOURCE_URL, "source_sha256": digest,
                          "observed_at": now.isoformat(), "prices": parse_prices(text)}
-            changed = digest != latest["source_sha256"]
-            if changed:
-                atomic_write_json(self.root / "pending.json", candidate)
-            status = {"state": "changed" if changed else "current", "checked_at": now.timestamp(),
-                      "source_sha256": digest, "active_revision": latest["effective_from"],
-                      "message": ("OpenAI updated its pricing webpage. Your cost estimates still use your saved rates. Open the control panel and choose Review pricing change to see whether prices differ."
-                                  if changed else "Official pricing source matches the saved rates.")}
+            error = None
         except Exception as exc:
-            status = {**previous, "state": "error", "checked_at": now.timestamp(),
-                      "message": f"Pricing check failed; saved rates retained. {exc}"}
-        atomic_write_json(self.root / "status.json", status)
-        return status
+            candidate = None
+            error = str(exc)
+        with _STORE_LOCK:
+            if _CHECKS.get(self._key) is not ticket:
+                return self.status()  # A newer request owns publication, even if it failed.
+            if candidate is None:
+                status = {**self.status(), "state": "error", "checked_at": now.timestamp(),
+                          "message": f"Pricing check failed; saved rates retained. {error}"}
+            else:
+                # Acceptance may have completed while this fetch was in flight.
+                latest = self.revisions()[-1]
+                changed = digest != latest["source_sha256"]
+                if changed:
+                    atomic_write_json(self.root / "pending.json", candidate)
+                status = {"state": "changed" if changed else "current", "checked_at": now.timestamp(),
+                          "source_sha256": digest, "active_revision": latest["effective_from"],
+                          "message": ("OpenAI updated its pricing webpage. Your cost estimates still use your saved rates. Open the control panel and choose Review pricing change to see whether prices differ."
+                                      if changed else "Official pricing source matches the saved rates.")}
+            atomic_write_json(self.root / "status.json", status)
+            return status
 
     def accept_pending(self, expected_hash: str, now=None):
         """Called only after the user reviews the exact candidate in the control panel."""
-        now = now or dt.datetime.now(dt.timezone.utc)
-        pending = json.loads((self.root / "pending.json").read_text(encoding="utf-8"))
-        if pending["source_sha256"] != expected_hash or self.status().get("state") != "changed":
-            raise ValueError("Pricing candidate changed; check and review it again.")
-        pending["effective_from"] = now.isoformat()
-        # Append-only revisions: accepting new rates never rewrites previous dates.
-        name = "revision-" + now.strftime("%Y%m%dT%H%M%S%fZ") + ".json"
-        atomic_write_json(self.root / name, pending)
-        atomic_write_json(self.root / "status.json", {
-            "state": "current", "checked_at": now.timestamp(), "source_sha256": expected_hash,
-            "active_revision": pending["effective_from"], "message": "Reviewed rates saved; previous pricing history retained."})
-        return pending
+        with _STORE_LOCK:
+            now = now or dt.datetime.now(dt.timezone.utc)
+            pending = json.loads((self.root / "pending.json").read_text(encoding="utf-8"))
+            state = self.status()
+            if (pending["source_sha256"] != expected_hash or state.get("state") != "changed"
+                    or state.get("source_sha256") != expected_hash):
+                raise ValueError("Pricing candidate changed; check and review it again.")
+            pending["effective_from"] = now.isoformat()
+            # Append-only revisions: accepting new rates never rewrites previous dates.
+            name = "revision-" + now.strftime("%Y%m%dT%H%M%S%fZ") + ".json"
+            atomic_write_json(self.root / name, pending)
+            atomic_write_json(self.root / "status.json", {
+                "state": "current", "checked_at": now.timestamp(), "source_sha256": expected_hash,
+                "active_revision": pending["effective_from"], "message": "Reviewed rates saved; previous pricing history retained."})
+            return pending
 
     def review_summary(self):
         """Read-only explanation for notification clicks, including stale balloons."""
-        state = self.status()
-        if state.get("state") == "current":
-            return "The pricing source is up to date. No review is pending. Earlier pricing history is retained."
-        if state.get("state") != "changed":
-            return state.get("message", "Pricing source has not been checked yet.") + "\n\nA failed check does not establish that prices changed. Saved rates remain in use."
-        explanation = ("OpenAI's pricing page changed. This does not necessarily mean the actual rates changed.\n\n"
-                       "Compare the rates with your saved pricing history and review the official page for changes to terms.")
-        try:
-            pending = json.loads((self.root / "pending.json").read_text(encoding="utf-8"))
-            if pending["source_sha256"] != state.get("source_sha256"):
-                raise ValueError("Candidate changed")
-            previous = self.revisions()[-1]
-            old, new = previous["prices"], pending["prices"]
-            changes = [m for m in sorted(old.keys() | new.keys()) if old.get(m) != new.get(m)]
-            comparison = (f"Tracked rate entries differ for {len(changes)} model(s): " + ", ".join(changes)
-                          if changes else "No tracked Standard token rates differ from the last accepted revision.")
-            explanation += "\n\n" + comparison + "\nCompared with revision: " + previous["effective_from"]
-        except (OSError, ValueError, KeyError, TypeError):
-            explanation += "\n\nThe pending comparison is unavailable. Check the source again before reviewing."
-        return explanation + "\n\nSaved rates remain active until you accept a reviewed update. Acceptance adds a dated revision; earlier history is preserved."
+        with _STORE_LOCK:
+            state = self.status()
+            if state.get("state") == "current":
+                return "The pricing source is up to date. No review is pending. Earlier pricing history is retained."
+            if state.get("state") != "changed":
+                return state.get("message", "Pricing source has not been checked yet.") + "\n\nA failed check does not establish that prices changed. Saved rates remain in use."
+            explanation = ("OpenAI's pricing page changed. This does not necessarily mean the actual rates changed.\n\n"
+                           "Compare the rates with your saved pricing history and review the official page for changes to terms.")
+            try:
+                pending = json.loads((self.root / "pending.json").read_text(encoding="utf-8"))
+                if pending["source_sha256"] != state.get("source_sha256"):
+                    raise ValueError("Candidate changed")
+                previous = self.revisions()[-1]
+                old, new = previous["prices"], pending["prices"]
+                changes = [m for m in sorted(old.keys() | new.keys()) if old.get(m) != new.get(m)]
+                comparison = (f"Tracked rate entries differ for {len(changes)} model(s): " + ", ".join(changes)
+                              if changes else "No tracked Standard token rates differ from the last accepted revision.")
+                explanation += "\n\n" + comparison + "\nCompared with revision: " + previous["effective_from"]
+            except (OSError, ValueError, KeyError, TypeError):
+                explanation += "\n\nThe pending comparison is unavailable. Check the source again before reviewing."
+            return explanation + "\n\nSaved rates remain active until you accept a reviewed update. Acceptance adds a dated revision; earlier history is preserved."
 
     def cost(self, record: dict, revisions=None):
         revisions = revisions or self.revisions()
