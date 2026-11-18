@@ -139,7 +139,7 @@ class BleAckTracker:
 
 
 from .delivery import DeliveryState
-from .delivery import remember_accepted, remember_desired, should_send
+from .delivery import remember_accepted, should_send
 
 
 class BleTransport:

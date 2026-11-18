@@ -117,3 +117,9 @@ Added a bounded real-Tk standalone-panel check to the package self-test. It runs
 polling worker against synthetic valid/offline/recovered ping replies and opens the details dialog.
 The existing native tray check covers clicks, dialogs, recovery and clean exit. Source self-test passed
 in an isolated D: profile; the final package must pass this expanded check too.
+
+### Extraction import review
+
+Removed unused protocol/helper imports left in the USB/BLE adapters and an unused BLE discovery type
+alias. Retained the original Chinese architecture document under architecture.upstream.md while
+replacing the current architecture guide. Adapter/discovery regression tests passed (recorded below).

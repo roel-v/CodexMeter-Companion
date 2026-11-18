@@ -11,21 +11,15 @@ import threading
 import queue
 import time
 from dataclasses import dataclass
-from typing import Callable
 from .serial_backend import open_serial
 from .companion_protocol import (
     LineDecoder,
     NegotiatedIdentity,
     ProtocolError,
-    encode_control,
-    encode_data,
-    parse_reply,
     object_json,
     FULL_ID,
-    UINT32,
 )
-from .transport_types import DeliveryResult, Endpoint
-from .payloads import Payload
+from .transport_types import Endpoint
 from .companion_session import CompanionSession, read_identity, IdentityIncompatible
 from .transport_types import TransportError, UnknownDelivery
 

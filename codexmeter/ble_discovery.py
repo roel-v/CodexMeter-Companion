@@ -8,13 +8,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
-from .device_identity import DeviceIdentity
 from .ble import MacConnectedDeviceLookup
 from .device_registry import DeviceConfig, parse_short_id_from_name
 from .settings import DEVICE_NAME, SERVICE_UUID
 
 log = logging.getLogger(__name__)
-IdentityObserver = Callable[[DeviceConfig, DeviceIdentity], DeviceConfig]
 
 
 @dataclass
