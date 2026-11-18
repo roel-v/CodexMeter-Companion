@@ -29,6 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = ["pytest>=8,<10"]
 hardware = ["pillow>=11,<14"]
 
 [project.urls]

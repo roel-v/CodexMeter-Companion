@@ -1,16 +1,12 @@
-# PR 说明
+## Change
 
-## 改动内容
+Describe the problem and resulting behavior.
 
-- 
+## Verification
 
-## 验证
+- [ ] Python suite: `python -m pytest -q` (use the environment and D: scratch setup in CONTRIBUTING.md).
+- [ ] Relevant native protocol/parser tests and all affected firmware targets.
+- [ ] Hardware checks, if performed: state which devices/transports and which settings were restored.
+- [ ] Documentation-only change; runtime checks not needed.
 
-- [ ] `.venv/bin/python tests/run_tests.py`
-- [ ] `PLATFORMIO_CORE_DIR="$PWD/.platformio" UV_CACHE_DIR="$PWD/.platformio/.cache/uv" .venv/bin/pio run -d firmware -e waveshare_amoled_216`
-- [ ] 已在设备上验证
-- [ ] 仅文档修改，无需运行测试
-
-## 注意事项
-
-请确认没有提交 token、cookie、个人日志、`.venv/`、`.platformio/`、`.npm-cache/` 或构建产物。
+State untested paths and relevant limitations. Keep credentials, private data, logs, caches and binaries out of Git.

@@ -1,57 +1,53 @@
-# 贡献指南
+# Contributing
 
-感谢你愿意改进 CodexMeter。这个项目同时包含 macOS daemon、Codex hook 和 ESP32 固件，修改时请尽量保持模块职责清晰。
+CodexMeter Companion contains a Windows/macOS companion and firmware for the Waveshare C6, Spotpear Ball and original
+Waveshare S3. Report bugs and discuss changes in [this repository](https://github.com/roel-v/CodexMeter-Companion/issues).
+Include reproduction steps and redacted diagnostics. Contributions are published under the MIT license.
 
-向本项目提交贡献，即表示你有权提交相关内容，并同意该贡献按项目的 [MIT License](LICENSE) 发布。
+## Development and tests
 
-提交代码前，请先搜索现有 [issues](https://github.com/tomatoeggs/CodexMeter/issues)。Bug 报告应包含版本、复现步骤和经过脱敏的相关日志；功能改动建议先说明使用场景和兼容性影响。
+On Windows, configure D: build output, caches and compiler scratch before installing dependencies:
 
-## 本地开发
-
-安装 macOS 端依赖：
-
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e .
+```powershell
+. ./scripts/windows-env.ps1
+uv venv D:/build/CodexMeter/venv
+uv pip install --python $MeterPython -e '.[test]'
+& $MeterPython -m pytest -q -p no:cacheprovider --basetemp D:/build/CodexMeter/test-tmp
 ```
 
-运行测试：
+On macOS, use the machine's configured fast build disk. For example, with BUILD_ROOT set to that location:
 
-```bash
-.venv/bin/python tests/run_tests.py
+```sh
+python3 -m venv "$BUILD_ROOT/venv"
+export TMPDIR="$BUILD_ROOT/tmp"
+mkdir -p "$TMPDIR"
+"$BUILD_ROOT/venv/bin/python" -m pip install -e '.[test]'
+"$BUILD_ROOT/venv/bin/python" -m pytest -q -p no:cacheprovider --basetemp "$BUILD_ROOT/test-tmp"
 ```
 
-编译固件：
+`python tests/run_tests.py` forwards arguments and exit codes to pytest for older workflows. It runs the same suite;
+pytest fixtures and parametrization are required. The test extra is not a runtime dependency.
 
-```bash
-PLATFORMIO_CORE_DIR="$PWD/.platformio" \
-UV_CACHE_DIR="$PWD/.platformio/.cache/uv" \
-.venv/bin/pio run -d firmware -e waveshare_amoled_216
-```
+## Firmware and standalone builds
 
-烧录固件：
+On Windows, use `tools/test_firmware_usb.ps1` for native protocol/parser tests and the D: PlatformIO environment from
+`scripts/windows-env.ps1`. Build each target with `pio run -d firmware -e TARGET` using that environment:
 
-```bash
-./flash-mac.sh waveshare_amoled_216 /dev/cu.usbmodem211201
-```
+- `waveshare_c6_amoled_216`
+- `spotpear_ball_v2`
+- `waveshare_amoled_216`
 
-## 代码约定
+Use `build-standalone.ps1` for the standalone Windows candidate; see its parameters and README.windows.md.
+Before large builds, check D: headroom. Retain bundles and evidence on E:; do not put active build/cache output there.
+On macOS, set PLATFORMIO_CORE_DIR, PLATFORMIO_BUILD_DIR, PLATFORMIO_LIBDEPS_DIR and UV_CACHE_DIR beneath BUILD_ROOT.
+Install PlatformIO separately in the build environment. Builds do not authorize flashing attached devices.
 
-- macOS 端保持单一职责：App Server、限额归一化、BLE、payload、事件入口分别独立。
-- 固件端保持硬件、BLE、模型解析、UI、电源管理分层。
-- BLE payload 必须控制在 512 bytes 以内。
-- alert 标题、正文和 UTF-8 字节数必须遵守 `codexmeter.payloads` 的边界；Unicode 显示由设备端 TTF 字体负责，不要另加未经测试的宿主字符过滤。
-- 不提交 `.venv/`、`.platformio/`、`.npm-cache/`、`__pycache__/`、构建产物和日志。
-- 不提交 token、cookie、Codex 登录态、GitHub token 或任何个人凭据。
+## Before submitting
 
-## 提交前检查
+Run the Python suite and relevant native/firmware checks. Explain what changed, why, and what was actually tested.
+Distinguish simulated checks from hardware checks; original S3 builds do not establish physical acceptance.
+Keep logical-device and delivery behavior shared; keep serial/GATT handling and board geometry in their adapters.
+Update protocol/persistence documentation when those contracts change. Preserve documented legacy compatibility.
 
-```bash
-.venv/bin/python tests/run_tests.py
-PLATFORMIO_CORE_DIR="$PWD/.platformio" UV_CACHE_DIR="$PWD/.platformio/.cache/uv" .venv/bin/pio run -d firmware -e waveshare_amoled_216
-```
-
-如果只修改文档，可以在 PR 或提交说明里注明未运行测试。
-
-Pull request 请保持主题单一，并说明行为变化、测试结果和硬件验证情况。涉及协议或持久化格式时，需要同时更新测试、README 和 `docs/architecture.md`。
+Do not commit credentials, chat content, private logs, caches, environments, binaries or other build output.
+For documentation-only changes, say that runtime tests were not needed.

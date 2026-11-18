@@ -1,54 +1,15 @@
 #!/usr/bin/env python3
-"""Tiny test runner for environments without pytest."""
-
-from __future__ import annotations
-
-import importlib
-import inspect
-import sys
-import tempfile
+"""Compatibility entry point for the canonical ``python -m pytest`` command."""
 from pathlib import Path
+import sys
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-
-TEST_MODULES = [
-    "tests.test_limits",
-    "tests.test_payloads",
-    "tests.test_provider",
-    "tests.test_local_usage",
-    "tests.test_events",
-    "tests.test_transcripts",
-    "tests.test_screen_policy",
-    "tests.test_daemon",
-    "tests.test_ble",
-    "tests.test_device_registry",
-    "tests.test_multi_ble",
-    "tests.test_supervision",
-    "tests.test_hook",
-    "tests.test_screenshot_tool",
-    "tests.test_device_logs_tool",
-    "tests.test_serial_device_tool",
-]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
-def main() -> int:
-    total = 0
-    for module_name in TEST_MODULES:
-        module = importlib.import_module(module_name)
-        for name, func in inspect.getmembers(module, inspect.isfunction):
-            if not name.startswith("test_"):
-                continue
-            total += 1
-            params = inspect.signature(func).parameters
-            if "tmp_path" in params:
-                with tempfile.TemporaryDirectory() as tmp:
-                    func(Path(tmp))
-            else:
-                func()
-    print(f"{total} tests passed")
-    return 0
+def main():
+    import pytest
+    return pytest.main(sys.argv[1:])
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())
