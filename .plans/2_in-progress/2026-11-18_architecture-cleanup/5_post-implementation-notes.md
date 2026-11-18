@@ -39,3 +39,10 @@ and simulated short/long suspend, resume grace, cancellation and late callback f
 Phase 3 follow-up: empty-root success now originates only from a fresh inventory read, not
 the publication timer. Actual observer-loop regression verifies the first publication preserves
 the incident until the next source read. Chat/compatibility integration tests passed.
+
+Phase 3 reader fencing: production chat connections and quota/token fetches now capture generation
+leases before asynchronous work. Obsolete successes and failures cannot publish health or payloads.
+Quota and unread-account context changes reset recovery evidence; unread samples reject account
+changes during database reads. Context fingerprints are local and absent from status/diagnostics.
+Validation: 54 reader, daemon and compatibility tests passed, including delayed success/failure
+and account rebind regressions.

@@ -18,7 +18,8 @@ import time
 import uuid
 
 from .payloads import Payload, build_activity_payload
-from .compatibility import ContractError, report_error
+from .compatibility import ContractError, report_error, SupersededObservation
+from .compatibility_readers import read_unread_snapshot
 from .compatibility_readers import read_roots, read_unread, validate_state
 
 FIELDS = {"threadRuntimeStatus", "hasUnreadTurn", "parentThreadId", "source"}
@@ -140,18 +141,26 @@ class ChatActivity:
         last_failure = None
         last_logged = 0.0
         while not stop_event.is_set():
+            observation = self.monitor.reader(("stream", "inventory", "unread")) if self.monitor else None
             try:
-                await self._observe(sink, stop_event)
+                await self._observe(sink, stop_event, observation)
+            except SupersededObservation:
+                return
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                if observation:
+                    try:
+                        observation.check()
+                    except SupersededObservation:
+                        return
                 # An incompatible private protocol must never take down BLE,
                 # quota sync, or the tray. Cancellation is handled above.
                 # Record code locations only: exception messages/locals may contain chat text.
                 import traceback
                 locations = [(Path(f.filename).name, f.name, f.lineno)
                              for f in traceback.extract_tb(exc.__traceback__)]
-                report_error(self.monitor, "stream", exc, eligible=self.desktop_running is not False)
+                report_error(observation, "stream", exc, eligible=self.desktop_running is not False)
                 if self.monitor and self.desktop_running is False:
                     for component in ("stream", "inventory", "unread"):
                         self.monitor.observe(component, "unavailable", "closed", eligible=False)
@@ -171,7 +180,11 @@ class ChatActivity:
             except TimeoutError:
                 pass
 
-    async def _observe(self, sink, stop_event):
+    async def _observe(self, sink, stop_event, observation=None):
+        monitor = observation or (self.monitor.reader(("stream", "inventory", "unread")) if self.monitor else None)
+        def check():
+            if monitor:
+                monitor.check()
         reader = asyncio.StreamReader(limit=CHUNK)
         protocol = asyncio.StreamReaderProtocol(reader)
         transport, _ = await asyncio.get_running_loop().create_pipe_connection(
@@ -192,6 +205,7 @@ class ChatActivity:
             async with asyncio.timeout(5):
                 while True:
                     message = await receive()
+                    check()
                     if message.get("requestId") == request:
                         client = message["result"]["clientId"]
                         break
@@ -210,27 +224,37 @@ class ChatActivity:
                 if now >= next_inventory:
                     try:
                         roots = await asyncio.to_thread(read_roots, self.home)
-                        if self.monitor:
-                            self.monitor.observe("inventory")
+                        check()
+                        if monitor:
+                            monitor.observe("inventory")
                             if not roots:
-                                self.monitor.observe("stream")
+                                monitor.observe("stream")
+                    except SupersededObservation:
+                        raise
                     except Exception as exc:
-                        report_error(self.monitor, "inventory", exc)
+                        check()
+                        report_error(monitor, "inventory", exc)
                         raise
                     try:
-                        done = await asyncio.to_thread(read_unread, self.home, roots)
+                        done, context = await asyncio.to_thread(read_unread_snapshot, self.home, roots)
+                        check()
+                        if monitor:
+                            monitor.bind("unread", context)
                         self.done_available = True
-                        if self.monitor:
-                            self.monitor.observe("unread")
-                            self.done_available = self.monitor.records["unread"].state == "compatible"
+                        if monitor:
+                            monitor.observe("unread")
+                            self.done_available = monitor.records["unread"].state == "compatible"
+                    except SupersededObservation:
+                        raise
                     except Exception as exc:
+                        check()
                         done = set()
                         self.done_available = False
                         if isinstance(exc, LookupError) and not isinstance(exc, ContractError):
-                            if self.monitor:
-                                self.monitor.observe("unread", "unavailable", "ambiguous_account")
+                            if monitor:
+                                monitor.observe("unread", "unavailable", "ambiguous_account")
                         else:
-                            report_error(self.monitor, "unread", exc)
+                            report_error(monitor, "unread", exc)
                     for tid in subscribed ^ roots:
                         send(dict(type="broadcast", method="thread-stream-following-changed",
                                   version=1, sourceClientId=client,
@@ -258,6 +282,7 @@ class ChatActivity:
                               method="thread-owner-discovery", timeoutMs=5000,
                               params=dict(hostId="local", conversationId=tid)))
                 finished, _ = await asyncio.wait({pending}, timeout=1)
+                check()
                 discovery = None
                 if finished:
                     message = pending.result()
@@ -316,13 +341,13 @@ class ChatActivity:
                     self.status["coverage"] = {"roots": len(roots), "snapshots": len(states),
                                                "verified": sum(tid in coverage for tid in roots)}
                     # Discovery is fresh source evidence, never a timer-generated success.
-                    if self.monitor and complete and evidence_changed:
-                        self.monitor.observe("stream")
+                    if monitor and complete and evidence_changed:
+                        monitor.observe("stream")
                         evidence_changed = False
-                    if self.monitor and not complete:
-                        self.monitor.observe("stream", "unavailable", "incomplete")
-                    stream_ok = complete and (self.monitor is None or
-                        self.monitor.records["stream"].state == "compatible")
+                    if monitor and not complete:
+                        monitor.observe("stream", "unavailable", "incomplete")
+                    stream_ok = complete and (monitor is None or
+                        monitor.records["stream"].state == "compatible")
                     self.payload = self._payload(stream_ok, count_chats(roots, done, states))
                     await sink(self.payload)
                     ready_at = now + 2

@@ -38,21 +38,31 @@ class CodexUsageProvider:
     )
 
     async def fetch(self) -> UsageSnapshot:
-        from .compatibility import report_error
+        from .compatibility import report_error, SupersededObservation
         from .compatibility_readers import validate_quota
         import time
-        monitor = self.monitor
+        monitor = self.monitor.reader(("quota", "tokens"), reset=False) if self.monitor else None
+        def check():
+            if monitor:
+                monitor.check()
         # Independent tasks: quota failure cannot prevent local usage collection.
         async def quotas():
             try:
                 async with JsonRpcClient(self.codex_bin, self.timeout_sec) as client:
                     await client.initialize()
                     account = await client.request("account/read", {"refreshToken": self.refresh_token})
+                    check()
+                    if monitor:
+                        import hashlib
+                        import json
+                        context = hashlib.sha256(json.dumps(account, sort_keys=True).encode()).hexdigest()
+                        monitor.bind("quota", context)
                     if isinstance(account, dict) and account.get("account", True) is None:
                         if monitor:
                             monitor.observe("quota", "unavailable", "authentication")
                         return None
                     rate_limits = await client.request("account/rateLimits/read")
+                check()
                 validate_quota(rate_limits)
                 result = usage_snapshot_from_rate_limits(rate_limits)
                 if monitor:
@@ -60,9 +70,10 @@ class CodexUsageProvider:
                     if monitor.records["quota"].state != "compatible":
                         return None
                 return result
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, SupersededObservation):
                 raise
             except Exception as exc:
+                check()
                 report_error(monitor, "quota", exc)
                 LOGGER.warning("Quota unavailable (%s)", type(exc).__name__)
                 return None
@@ -73,6 +84,7 @@ class CodexUsageProvider:
             try:
                 now = dt.datetime.now().astimezone()
                 daily = await asyncio.to_thread(self.local_usage_reader.read_daily_tokens, now)
+                check()
                 if daily is None:
                     if monitor:
                         monitor.observe("tokens", "unavailable", "no_history")
@@ -84,22 +96,28 @@ class CodexUsageProvider:
                         from .pricing import PricingStore, PRICING_DIR
                         from .persistence import atomic_write_json
                         details = await asyncio.to_thread(self.local_usage_reader.read_breakdown, daily, PricingStore())
+                        check()
                         await asyncio.to_thread(atomic_write_json, PRICING_DIR / "usage-report.json", details)
+                    except SupersededObservation:
+                        raise
                     except Exception:
+                        check()
                         LOGGER.warning("Token pricing unavailable; totals retained")
                 if monitor:
                     monitor.observe("tokens")
                     if monitor.records["tokens"].state != "compatible":
                         return None
                 return daily[now.date()], sum(daily.values()), details
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, SupersededObservation):
                 raise
             except Exception as exc:
+                check()
                 report_error(monitor, "tokens", exc)
                 LOGGER.warning("Local token activity unavailable (%s)", type(exc).__name__)
                 return None
 
         snapshot, usage = await asyncio.gather(quotas(), local())
+        check()
         if snapshot is None:
             snapshot = UsageSnapshot("codex", None, None, None, None, "stale", int(time.time()))
         if usage is not None:

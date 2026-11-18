@@ -32,6 +32,10 @@ def safe_details(details):
                 result[key] = details[key]
     return result
 
+class SupersededObservation(RuntimeError):
+    """A newer reader or connection owns this component now."""
+
+
 class ContractError(ValueError):
     def __init__(self, reason="structure", field="coverage", *, definitive=False, version=None):
         super().__init__(reason)
@@ -68,6 +72,7 @@ class CompatibilityMonitor:
         self.host_running = None
         self.notified = {}
         self.versions = {}
+        self.reader_contexts = {}
         self.pending_since = None
         self.storage_ok = True
         if path:
@@ -98,12 +103,18 @@ class CompatibilityMonitor:
             except Exception:
                 self.storage_ok = False
 
-    def begin(self, component):
+    def begin(self, component, *, reset=True):
         r = self.records[component]
         r.generation += 1
-        r.validated = None
-        r.successes = 0
+        if reset:
+            r.validated = None
+            r.successes = 0
+            if r.state == "compatible":
+                r.state, r.reason = "checking", "starting"
         return r.generation
+
+    def reader(self, components, *, reset=True):
+        return ReaderObservation(self, components, reset=reset)
 
     def observe(self, component, state="compatible", reason="ok", details=None, *,
                 definitive=False, generation=None, eligible=True):
@@ -245,3 +256,26 @@ def report_error(monitor, component, exc, *, eligible=True):
     elif isinstance(exc, (ConnectionError, OSError)):
         reason = "connection"
     monitor.observe(component, state, reason, details, definitive=definitive, eligible=eligible)
+
+
+class ReaderObservation:
+    """Lease captured before asynchronous work; health and payloads share the fence."""
+    def __init__(self, monitor, components, *, reset=True):
+        self.monitor = monitor
+        self.generations = {key: monitor.begin(key, reset=reset) for key in components}
+        self.records = monitor.records
+
+    def check(self):
+        if any(self.records[key].generation != value for key, value in self.generations.items()):
+            raise SupersededObservation()
+
+    def bind(self, component, context):
+        self.check()
+        previous = self.monitor.reader_contexts.get(component)
+        if previous != context:
+            self.monitor.reader_contexts[component] = context
+            self.generations[component] = self.monitor.begin(component)
+
+    def observe(self, component, *args, **kwargs):
+        self.check()
+        self.monitor.observe(component, *args, generation=self.generations[component], **kwargs)

@@ -109,6 +109,7 @@ async def quota_loop(
     stop_event: asyncio.Event,
     poll_interval: int,
 ) -> None:
+    from .compatibility import SupersededObservation
     cached_snapshot = load_cached_usage_snapshot()
     if cached_snapshot is not None:
         logging.info(
@@ -152,6 +153,8 @@ async def quota_loop(
                 log_usage_decision(raw_snapshot, decision)
                 if decision.accepted:
                     save_cached_usage_snapshot(snapshot)
+        except SupersededObservation:
+            pass  # A newer reader owns the result; do not publish stale data.
         except asyncio.CancelledError:
             raise
         except Exception:

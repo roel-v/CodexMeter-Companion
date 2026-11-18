@@ -28,6 +28,10 @@ def read_roots(home):
     return roots
 
 def read_unread(home, roots):
+    return read_unread_snapshot(home, roots)[0]
+
+
+def read_unread_snapshot(home, roots):
     try:
         raw = json.loads((home / ".codex-global-state.json").read_text(encoding="utf-8"))
         identities = raw["electron-thread-read-state-v1"]["unreadByIdentity"]
@@ -36,7 +40,8 @@ def read_unread(home, roots):
         if len(identities) != 1:
             # Ambiguous identity is unavailable, not a schema failure.
             raise LookupError("ambiguous_account")
-        hosts = next(iter(identities.values()))
+        identity = next(iter(identities))
+        hosts = identities[identity]
         if not isinstance(hosts, dict):
             raise TypeError()
         unread = set()
@@ -58,7 +63,16 @@ def read_unread(home, roots):
                     raise ContractError(field="history")
                 if row[0] == "completed":
                     completed.add(tid)
-    return completed
+    # The account may change while SQLite is being read. Reject that mixed sample.
+    try:
+        current = json.loads((home / ".codex-global-state.json").read_text(encoding="utf-8"))
+        current = current["electron-thread-read-state-v1"]["unreadByIdentity"]
+        if not isinstance(current, dict) or list(current) != [identity]:
+            raise LookupError("ambiguous_account")
+    except (KeyError, TypeError, ValueError):
+        raise ContractError(field="unread") from None
+    import hashlib
+    return completed, hashlib.sha256(identity.encode()).hexdigest()
 
 def validate_state(state):
     if not isinstance(state, dict):

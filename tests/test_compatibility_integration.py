@@ -164,7 +164,7 @@ def test_empty_inventory_recovery_requires_fresh_reads(monkeypatch):
         reads = []
         def roots(home): reads.append(clock.now); return set()
         monkeypatch.setattr(activity, "read_roots", roots)
-        monkeypatch.setattr(activity, "read_unread", lambda *args: set())
+        monkeypatch.setattr(activity, "read_unread_snapshot", lambda *args: (set(), "test"))
         async def wait(tasks, timeout):
             clock.now += 1
             await asyncio.sleep(0)
@@ -178,4 +178,54 @@ def test_empty_inventory_recovery_requires_fresh_reads(monkeypatch):
         await activity.ChatActivity(monitor=monitor)._observe(sink, stop)
         assert publications[0] == (1, 1, True)
         assert publications[-1] == (2, 2, False)
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_obsolete_provider_completion_cannot_change_new_health_or_payload(failure):
+    from codexmeter.compatibility import SupersededObservation
+    async def run():
+        entered = asyncio.Event(); release = asyncio.Event()
+        class Delayed(FakeClient):
+            first = True
+            async def request(self, method, params=None):
+                if method == "account/rateLimits/read" and Delayed.first:
+                    Delayed.first = False
+                    entered.set(); await release.wait()
+                    if failure: raise ConnectionError("obsolete")
+                return await super().request(method, params)
+        monitor = CompatibilityMonitor()
+        provider = CodexUsageProvider(monitor=monitor, local_usage_reader=FakeLocalUsageReader())
+        with patch("codexmeter.provider.JsonRpcClient", Delayed):
+            old = asyncio.create_task(provider.fetch())
+            await entered.wait()
+            latest = await provider.fetch()
+            before = monitor.snapshot()
+            release.set()
+            with pytest.raises(SupersededObservation): await old
+            assert latest.d7_remaining_percent == 97
+            assert monitor.snapshot() == before
+    asyncio.run(run())
+
+
+def test_account_rebind_requires_new_successes():
+    async def run():
+        class AccountClient(FakeClient):
+            account = "a"
+            async def request(self, method, params=None):
+                if method == "account/read": return {"account": {"id": self.account}}
+                return await super().request(method, params)
+        monitor = CompatibilityMonitor()
+        provider = CodexUsageProvider(monitor=monitor, local_usage_reader=FakeLocalUsageReader())
+        with patch("codexmeter.provider.JsonRpcClient", AccountClient):
+            await provider.fetch()
+            monitor.observe("quota", "incompatible", "schema", definitive=True)
+            await provider.fetch()
+            assert monitor.records["quota"].successes == 1
+            AccountClient.account = "b"
+            await provider.fetch()
+            assert monitor.records["quota"].incident
+            assert monitor.records["quota"].successes == 1
+            await provider.fetch()
+            assert not monitor.records["quota"].incident
     asyncio.run(run())
