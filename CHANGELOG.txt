@@ -4,6 +4,12 @@ Entries are grouped by release date, newest first. Application versions are
 recorded separately; firmware changes are noted where applicable.
 
 2026-11-18 — unreleased compatibility and architecture cleanup (Windows and firmware 3.12.3.4)
+- Coordinate pricing acceptance with concurrent checks; preserve newer pending changes and rate history.
+- Date desktop token reports and explicitly mark stale, legacy or unavailable breakdown/cost estimates.
+- Keep failed registry saves out of recovery backups and share mutation rollback handling.
+- Isolate fault-test registries, distinguish observed command conflicts from valid sequential acknowledgements,
+  and complete the worker/session management contract with shared test peers.
+- Use the package version in the update dialog and correct CLI usage-provider argument binding.
 - Report per-display command outcomes from acknowledgements, retain failures across telemetry updates,
   and offer an explicit settings check/retry for conflicts or uncertain delivery.
 - Close metadata databases deterministically and bound screenshot header searches across noisy serial output.

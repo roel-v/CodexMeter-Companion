@@ -36,3 +36,7 @@ Tests use synthetic state and fake I/O. Active caches/temp stay on D:, retained 
 installed settings, running app or boards are touched. Firmware behavior/geometry are unchanged; no firmware rebuild
 or physical test is required. There are no unresolved product decisions or dependency graph. Move the whole plan to
 3_done after software acceptance. Record actual results, failures and limits in 5_post-implementation-notes.md.
+
+## Completion
+
+All phases completed and software acceptance passed on 2026-11-18. See 5_post-implementation-notes.md for commits, evidence and deployment limits.

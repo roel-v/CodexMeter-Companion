@@ -97,3 +97,27 @@ not the companion application protocol. A partial write cannot silently advance 
 USB and Bluetooth adapters own discovery and physical I/O. session_runner owns reconciliation, replay, queue delivery and logical session cleanup. DeviceManager supplies one lazily resolved host identity to every adapter.
 
 companion_protocol validates wire structure; device_policy separately enforces supported application/wire versions and the three reviewed models. Adding a syntactically valid model does not grant support. USB and Bluetooth check this policy before ownership claims. Controls require the advertised capability; a telemetry-only device need not advertise brightness or rotation. Legacy handling stays at the adapter boundary. Busy ownership classification is shared by retry, failure accounting and recovery filtering.
+
+
+### Pricing and desktop report consistency
+PricingStore coordinates publication and review acceptance across instances in the single companion process.
+Network requests run outside the shared lock. Newer requests supersede late responses; publication compares against
+currently accepted history, and acceptance verifies both pending and status hashes. Each accepted revision remains
+append-only. Completed request fences are discarded. This is thread coordination, not a cross-process lock service.
+
+Usage collection returns domain data independently of report output. Daemon/CLI explicitly opt into a dated report
+file. The versioned envelope contains observation time, calendar window, availability and data. The desktop presenter
+marks older-than-five-minute or previous-day reports stale, refuses undated legacy figures, and shows unavailable
+instead of the previous successful breakdown after a failed collection. Failed report writes leave a timestamped
+older report that ages out; they do not make token collection fail.
+
+The primary JSON replacement is the persistence commit point. Recovery backups refresh only from committed data;
+post-commit backup/directory-flush failures are logged without falsely rolling in-memory configuration back.
+
+WorkerSession declares identity, failure, state reads and maintenance used by management. TransportSession retains
+delivery/open/close semantics; WireChannel retains physical framing I/O. Real USB/BLE adapters are checked through
+simulated peers. Shared tests.support modules contain reusable fixtures and no collected tests.
+
+Hardware failure fixtures use disposable registry copies on D: on Windows (override with --scratch-root on D:).
+Input registries containing maintenance state are rejected before touching hardware. Rapid-command checks distinguish
+both-applied sequencing from an observed conflict; deterministic session/ledger tests establish stale-revision rejection.
