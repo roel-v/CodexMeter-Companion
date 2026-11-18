@@ -249,13 +249,7 @@ class DeviceManager:
                     if coordinator.kind and not coordinator.permitted(coordinator.kind):
                         await coordinator.fence()
                 return {'ok':True, **updated.to_json()}
-            previous = list(self.registry.devices)
-            self.registry.upsert(config)
-            try:
-                self.registry.save()
-            except BaseException:
-                self.registry.devices = previous
-                raise
+            self.registry.save_device(config)
             slot = DeviceSlot(config)
             self.slots.append(slot)
             self._workers.append(DeviceWorker(slot, self.discovery,
@@ -297,13 +291,7 @@ class DeviceManager:
 
     def _persist_config(self, slot, updated):
         if self.registry is not None:
-            previous = list(self.registry.devices)
-            self.registry.upsert(updated)
-            try:
-                self.registry.save()
-            except BaseException:
-                self.registry.devices = previous
-                raise
+            self.registry.save_device(updated)
         slot.config = updated
 
     async def device_operation(self, event):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -25,15 +26,23 @@ def atomic_write_json(
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
-        if backup_path is not None:
-            _atomic_copy(tmp_path, backup_path)
+        # Primary replacement is the commit point. Never seed recovery with an
+        # uncommitted candidate or report a rollback after committing it.
         os.replace(tmp_path, path)
-        _fsync_directory(path.parent)
+        try:
+            _fsync_directory(path.parent)
+        except OSError:
+            logging.exception("State committed but directory flush failed: %s", path)
+        if backup_path is not None:
+            try:
+                _atomic_copy(path, backup_path)
+            except OSError:
+                logging.exception("State committed but recovery backup refresh failed: %s", path)
     finally:
         try:
             tmp_path.unlink()
-        except FileNotFoundError:
-            pass
+        except OSError:
+            pass  # Temporary-file cleanup must not change the commit outcome.
 
 
 def _atomic_copy(source: Path, destination: Path) -> None:
@@ -51,8 +60,8 @@ def _atomic_copy(source: Path, destination: Path) -> None:
     finally:
         try:
             tmp_path.unlink()
-        except FileNotFoundError:
-            pass
+        except OSError:
+            pass  # Temporary-file cleanup must not change the commit outcome.
 
 
 def _fsync_directory(path: Path) -> None:

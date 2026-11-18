@@ -156,6 +156,16 @@ class DeviceRegistry:
             backup_path=self.path.with_suffix(self.path.suffix + ".bak"),
         )
 
+    def save_device(self, device: DeviceConfig) -> None:
+        """Publish one config and roll back memory only if the save did not commit."""
+        previous = list(self.devices)
+        self.upsert(device)
+        try:
+            self.save()
+        except BaseException:
+            self.devices = previous
+            raise
+
     def enabled_devices(self) -> list[DeviceConfig]:
         return [device for device in self.devices if device.enabled]
 
