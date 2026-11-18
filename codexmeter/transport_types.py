@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Protocol
 from .payloads import Payload
+from .companion_protocol import NegotiatedIdentity
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,7 @@ class DeliveryResult:
 
 class TransportSession(Protocol):
     generation: str
-    identity: object
+    identity: NegotiatedIdentity
     state: dict
     failure: Exception | None
     async def open(self, *, maintenance=False): ...

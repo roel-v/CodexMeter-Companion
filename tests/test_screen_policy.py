@@ -50,3 +50,24 @@ def test_parse_ioreg_lock_state():
     assert parse_ioreg_lock_state('"IOConsoleLocked" = No') is False
     assert parse_ioreg_lock_state('"CGSSessionScreenIsLocked"=Yes') is True
     assert parse_ioreg_lock_state("no lock key") is None
+
+
+def test_policy_loop_uses_shared_policy_and_manager_callback():
+    import asyncio
+    from codexmeter.screen_policy import screen_policy_loop
+    async def exercise():
+        stop = asyncio.Event()
+        received, connection = [], []
+        policy = LockScreenPolicy(timeout_sec=1)
+        class Detector:
+            async def is_locked(self):
+                return False
+        async def sink(payload):
+            received.append(payload)
+            stop.set()
+        await screen_policy_loop(sink, stop, detector=Detector(), policy=policy,
+                                 connect_control_setter=connection.append)
+        assert received[0].data["why"] == "unlock"
+        assert connection[0].data["why"] == "connection_restored"
+        assert policy.observe(False, now=10**9, epoch_now=1).payloads == ()
+    asyncio.run(exercise())

@@ -104,3 +104,9 @@ generates a header in its D: build directory; the isolated MTU test suffix remai
 Validation: full Python suite passed, 387 tests, without compiler contention. Header generation is
 stable when unchanged and rejects malformed/duplicate/oversized versions before output. Final target
 and onefile builds are running as phase-8 verification.
+
+### Final boundary review
+
+Removed the remaining single-display screen-policy argument (production always passed None), leaving
+only the shared policy and manager callback. The transport contract now types its negotiated identity.
+Validation: 36 policy/coordinator/daemon tests passed, including the actual periodic observation loop.

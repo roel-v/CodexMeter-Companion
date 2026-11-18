@@ -451,7 +451,6 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             "updates": update_monitor_loop(stop_event, desktop),
             "screen_policy": screen_policy_loop(
                 sink,
-                None,
                 stop_event,
                 timeout_sec=args.auto_screen_timeout,
                 poll_interval_sec=args.lock_poll_interval,

@@ -10,7 +10,6 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from .delivery import DeliveryState
 from .payloads import Payload, build_screen_control_payload
 from .settings import AUTO_SCREEN_TIMEOUT_SEC, LOCK_POLL_INTERVAL_SEC
 
@@ -152,7 +151,6 @@ def parse_ioreg_lock_state(text: str) -> bool | None:
 
 async def screen_policy_loop(
     sink: PayloadSink,
-    ble_state: DeliveryState | None,
     stop_event: asyncio.Event,
     *,
     timeout_sec: float = AUTO_SCREEN_TIMEOUT_SEC,
@@ -174,8 +172,6 @@ async def screen_policy_loop(
                 now=time.monotonic(),
                 epoch_now=int(time.time()),
             )
-            if ble_state is not None:
-                ble_state.connect_control = result.connect_control
             if connect_control_setter is not None:
                 connect_control_setter(result.connect_control)
             for payload in result.payloads:
