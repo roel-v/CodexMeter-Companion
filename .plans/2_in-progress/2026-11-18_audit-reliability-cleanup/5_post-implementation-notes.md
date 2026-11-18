@@ -13,3 +13,9 @@ Canonical/wrapper collection matched. Fresh D: environment installed .[test] and
 Nine close-lifetime regressions failed before the change. open_database now returns a closing context and all callers
 retain read-only access. Success, schema/query errors, malformed values and account fencing close before return with
 GC disabled. Focused reader/compatibility/chat tests: 50 passed, one inapplicable roots/account combination skipped.
+
+## Phase 3
+
+Five new regressions demonstrated the endless noisy/blank stream and ignored failure markers. Capture now uses one
+monotonic header deadline, remaining read budgets and explicit failure handling. Before/exact-boundary, existing CRC,
+older headers, optional end marker and maintenance/page cleanup checks pass.

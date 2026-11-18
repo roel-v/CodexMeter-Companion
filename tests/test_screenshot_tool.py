@@ -82,3 +82,44 @@ def test_full_frame_capture_checksum_and_legacy_header(monkeypatch, checksum):
             capture_screenshot.capture_rgb565le('fake')
     else:
         assert capture_screenshot.capture_rgb565le('fake')==(2,1,data)
+
+@pytest.mark.parametrize('line', [b'INFO periodic log', b''])
+def test_header_has_total_deadline(monkeypatch, line):
+    now=[0.]; budgets=[]; closed=[]
+    class Serial:
+        def __enter__(self):return self
+        def __exit__(self,*args):closed.append(True)
+        def write_line(self,_):pass
+        def read_line(self, timeout):
+            budgets.append(timeout)
+            assert len(budgets)<6, 'header search has no total deadline'
+            now[0]+=min(3,timeout)
+            return line
+        def read_exact(self,*args):raise AssertionError('raw read after timeout')
+    monkeypatch.setattr(capture_screenshot,'SerialSession',lambda _:Serial())
+    monkeypatch.setattr(capture_screenshot.time,'monotonic',lambda:now[0])
+    with pytest.raises(capture_screenshot.CaptureError,match='header'):
+        capture_screenshot.capture_rgb565le('fake',line_timeout=8)
+    assert budgets==[8,5,2] and closed==[True]
+
+@pytest.mark.parametrize('marker',[b'SCREENSHOT_FAILED',b'SCREENSHOT_SCREEN_OFF',b'TILED_SCREENSHOT_START 480 480'])
+def test_header_failure_markers_stop_immediately(monkeypatch, marker):
+    lines=iter([marker])
+    serial=SimpleNamespace(write_line=lambda _:None,read_line=lambda _:next(lines))
+    monkeypatch.setattr(capture_screenshot,'SerialSession',lambda _:nullcontext(serial))
+    with pytest.raises(capture_screenshot.CaptureError):capture_screenshot.capture_rgb565le('fake')
+
+@pytest.mark.parametrize('at,valid', [(7.999,True),(8,False)])
+def test_header_deadline_boundary(monkeypatch,at,valid):
+    now=[0.]; calls=[]
+    def read(timeout):
+        calls.append(timeout)
+        if len(calls)==1:now[0]=at;return b'SCREENSHOT_START 1 1 2'
+        return b'SCREENSHOT_END'
+    serial=SimpleNamespace(write_line=lambda _:None,read_line=read,read_exact=lambda *a:b'\x00\x00')
+    monkeypatch.setattr(capture_screenshot,'SerialSession',lambda _:nullcontext(serial))
+    monkeypatch.setattr(capture_screenshot.time,'monotonic',lambda:now[0])
+    if valid:assert capture_screenshot.capture_rgb565le('fake',line_timeout=8)==(1,1,b'\x00\x00')
+    else:
+        with pytest.raises(capture_screenshot.CaptureError,match='header'):
+            capture_screenshot.capture_rgb565le('fake',line_timeout=8)

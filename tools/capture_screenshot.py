@@ -39,9 +39,22 @@ def capture_rgb565le(
         for command in pre_commands:
             serial.write_line(command)
         serial.write_line("screenshot")
+        deadline = time.monotonic() + line_timeout
         while True:
-            line = serial.read_line(line_timeout)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise CaptureError("Timed out waiting for screenshot header")
+            try:
+                line = serial.read_line(remaining)
+            except SerialToolError as exc:
+                raise CaptureError("Timed out waiting for screenshot header") from exc
+            if time.monotonic() >= deadline:
+                raise CaptureError("Timed out waiting for screenshot header")
             text = line.decode("utf-8", errors="replace").strip()
+            if text in ("SCREENSHOT_FAILED", "SCREENSHOT_SCREEN_OFF"):
+                raise CaptureError(f"device reported {text}")
+            if text.startswith("TILED_SCREENSHOT_"):
+                raise CaptureError("device requires tiled screenshot capture")
             if not text:
                 continue
             if text == "SCREENSHOT_ERR":
