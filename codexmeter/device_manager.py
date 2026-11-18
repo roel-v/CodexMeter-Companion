@@ -73,6 +73,7 @@ class DeviceManager:
             scan_interval_sec=scan_interval_sec,
         )
         self._transport_options = dict(
+            host_id_provider=self.host_identity,
             connect_timeout_sec=min(5, connect_timeout_sec), disconnect_timeout_sec=min(.5, disconnect_timeout_sec),
             write_timeout_sec=write_timeout_sec, ack_timeout_sec=ack_timeout_sec,
             notify_timeout_sec=notify_timeout_sec, healthcheck_interval_sec=healthcheck_interval_sec)
@@ -80,31 +81,30 @@ class DeviceManager:
             DeviceWorker(
                 slot,
                 self.discovery,
-                BleTransport(
-                    connect_timeout_sec=min(5, connect_timeout_sec),
-                    disconnect_timeout_sec=min(.5, disconnect_timeout_sec),
-                    write_timeout_sec=write_timeout_sec,
-                    ack_timeout_sec=ack_timeout_sec,
-                    notify_timeout_sec=notify_timeout_sec,
-                    healthcheck_interval_sec=healthcheck_interval_sec,
-                ),
+                BleTransport(**self._transport_options),
                 identity_observer,
             )
             for slot in self.slots
         ]
+
+    def host_identity(self):
+        """Resolve once, including workers added after manager construction."""
+        if self._host_id is None:
+            from .host_identity import load_host_id
+            self._host_id = load_host_id()
+        return self._host_id
 
     def _coordinators_init(self):
         if not hasattr(self, 'coordinators'):
             self.coordinators = []
         from .device_coordinator import DeviceCoordinator
         from .usb_worker import UsbDeviceWorker
-        from .host_identity import load_host_id
         for worker in self._workers:
             if any(c.slot is worker.slot for c in self.coordinators):
                 continue
             worker.transport.on_reconciled = self._reconciled
             def usb_factory(slot=worker.slot):
-                usb = UsbDeviceWorker(slot, self.usb_discovery, self._host_id or load_host_id(),
+                usb = UsbDeviceWorker(slot, self.usb_discovery, self.host_identity(),
                                       identity_observer=self._identity_observer)
                 usb.on_reconciled = self._reconciled
                 return usb
@@ -312,7 +312,6 @@ class DeviceManager:
     async def _device_operation(self, event):
         import secrets
         from .device_registry import CONNECTION_MODES
-        from .host_identity import load_host_id
         from .usb_transport import maintenance_connection
         if event.get('type') == 'device_registry_update':
             return await self.update_registry(event)
@@ -386,7 +385,7 @@ class DeviceManager:
                             self._persist_config(slot, replace(slot.config, maintenance=record))
                             coordinator.transition('maintenance', 'Local pause; legacy firmware cannot quiesce other PCs')
                             return {'ok':True, 'device_id':device_id, **record}
-                        session = await maintenance_connection(port, self._host_id or load_host_id(),
+                        session = await maintenance_connection(port, self.host_identity(),
                             record['token'], device_id)
                         record.update(boot=session.identity.boot, token=session.token)
                         await session.close(release=False)
@@ -423,7 +422,7 @@ class DeviceManager:
                     if raw['device_id'] != device_id:
                         raise ValueError('Maintenance device identity mismatch; pause retained')
                     if not legacy:
-                        session = await maintenance_connection(port, self._host_id or load_host_id(),
+                        session = await maintenance_connection(port, self.host_identity(),
                             record['token'], device_id)
                         try:
                             await session.end_maintenance()

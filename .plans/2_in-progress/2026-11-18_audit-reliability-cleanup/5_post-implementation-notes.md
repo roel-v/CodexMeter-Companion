@@ -31,3 +31,6 @@ cover send-lock supersession, cancellation before/after dispatch, lost ACKs, dur
 ### Phase 4 panel
 Actual Tk widgets exercised with isolated IPC: queued/conflict/explicit retry, acknowledged command with failed readback, unknown outcome and settings check, selection fencing, disconnected retry, older daemon and closure. Focused panel/backend run: 15 passed. Packaged self-test invokes the same widget diagnostic.
 
+### Phase 5
+Shared runner owns open/reconciliation/replay/queue consumption and logical disconnect/close. Adapters retain discovery, physical connection and invalidation. Manager resolves one host identity lazily for initial/dynamic BLE, USB and maintenance. Existing transport/coordinator/result suites: 64 passed; new parameterized adapter open/policy failure, normal stop and cancellation checks: 8 passed. No hardware touched.
+

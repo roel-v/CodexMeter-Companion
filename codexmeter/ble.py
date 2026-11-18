@@ -151,8 +151,10 @@ class BleTransport:
         ack_timeout_sec: float = BLE_ACK_TIMEOUT_SEC,
         notify_timeout_sec: float = BLE_NOTIFY_TIMEOUT_SEC,
         healthcheck_interval_sec: float = BLE_HEALTHCHECK_INTERVAL_SEC,
+        host_id_provider=None,
     ) -> None:
         self.session = None
+        self.host_id_provider = host_id_provider
         self.connect_timeout_sec = connect_timeout_sec
         self.disconnect_timeout_sec = disconnect_timeout_sec
         self.write_timeout_sec = write_timeout_sec
@@ -340,36 +342,16 @@ class BleTransport:
     async def _negotiated(self, client, identity, queue, state, stop_event):
         from .ble_session import BleSession
         from .host_identity import load_host_id
-        from .delivery_pump import DeliveryPump
-        from .delivery import negotiated_replay
-        session=BleSession(client,identity,load_host_id())
+        from .session_runner import run_session
+        session = BleSession(client, identity, (self.host_id_provider or load_host_id)())
         self.session = session
-        delivery=DeliveryPump(state, session)
         try:
-            await session.open()
-            state.connected=True;state.transport='bluetooth';state.generation=session.generation
-            state.last_connected_at=time.monotonic();state.last_error=None
-            state.device_state={**session.state,'boot':session.identity.boot}
-            while not queue.empty():
-                queue.get_nowait()
-            replay = negotiated_replay(state, same_host=session.state['same_host'])
-            hook = getattr(self, 'on_reconciled', None)
-            if hook:
-                await hook(state, session)
-            for payload in replay:
-                await delivery.deliver(payload)
-            while client.is_connected and not stop_event.is_set() and not session.failure:
-                try: payload=await asyncio.wait_for(queue.get(),.1)
-                except TimeoutError:continue
-                await delivery.deliver(payload)
-            if session.failure:raise session.failure
+            await run_session(session, state, queue, stop_event, transport="bluetooth",
+                              on_reconciled=getattr(self, 'on_reconciled', None),
+                              available=lambda: client.is_connected)
             return True
         finally:
-            state.connected=False;state.last_disconnected_at=time.monotonic()
-            try:
-                await session.close()
-            finally:
-                self.session = None
+            self.session = None
 
     async def connect_and_write(
         self,
