@@ -1,4 +1,4 @@
-"""BLE payload builders."""
+"""Transport-independent display payload builders."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Any
 from .limits import UsageSnapshot
 
 
-MAX_BLE_PAYLOAD_BYTES = 512
+from .companion_protocol import MAX_APPLICATION
 MAX_ALERT_TITLE_BYTES = 47
 MAX_ALERT_TITLE_CHARS = 16
 MAX_ALERT_BODY_BYTES = 210
@@ -116,18 +116,18 @@ def build_alert_payload(
 
 def encode_payload(data: dict[str, Any]) -> bytes:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    if len(payload) <= MAX_BLE_PAYLOAD_BYTES:
+    if len(payload) <= MAX_APPLICATION:
         return payload
     if data.get("k") != "alert":
         raise ValueError(f"BLE payload too large: {len(payload)} bytes")
 
     trimmed = dict(data)
     body = str(trimmed.get("body") or "")
-    while body and len(payload) > MAX_BLE_PAYLOAD_BYTES:
+    while body and len(payload) > MAX_APPLICATION:
         body = truncate_utf8(body, max(0, len(body.encode("utf-8")) - 24))
         trimmed["body"] = body
         payload = json.dumps(trimmed, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    if len(payload) > MAX_BLE_PAYLOAD_BYTES:
+    if len(payload) > MAX_APPLICATION:
         raise ValueError(f"BLE alert payload too large: {len(payload)} bytes")
     return payload
 

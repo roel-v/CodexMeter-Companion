@@ -62,7 +62,7 @@ const char* Session::sequence(uint32_t seq, const char* revision, const char* pa
   return seq_ == UINT32_MAX || seq != seq_ + 1 ? "out_of_order" : nullptr;
 }
 void Session::remember(uint32_t seq, const char* revision, const char* payload, const char* error) {
-  if(!revision || !payload || strlen(revision)>10 || strlen(payload)>512 || (error && strlen(error)>=sizeof(outcome_)))return;
+  if(!revision || !payload || strlen(revision)>10 || strlen(payload)>payload_limit || (error && strlen(error)>=sizeof(outcome_)))return;
   seq_ = seq; strcpy(revision_, revision); strcpy(payload_, payload);
   if (error) strcpy(outcome_, error); else outcome_[0] = 0;
 }
@@ -70,7 +70,7 @@ int AlertLedger::accept(const char* id, uint32_t now) {
   if (!lower_hex(id, 12)) return -1;
   Entry* free = nullptr;
   for (auto& entry : entries_) {
-    bool live = entry.id[0] && uint32_t(now - entry.at) < 65000;
+    bool live = entry.id[0] && uint32_t(now - entry.at) < alert_dedup_ms;
     if (live && !strcmp(entry.id, id)) return 1;
     if (!live && !free) free = &entry;
   }

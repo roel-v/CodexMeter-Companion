@@ -24,7 +24,7 @@ from .compatibility_readers import read_roots, validate_state
 FIELDS = {"threadRuntimeStatus", "hasUnreadTurn", "parentThreadId", "source"}
 from .ipc_projection import CHUNK, receive_metadata
 WAIT_FLAGS = {"waitingOnApproval", "waitingOnUserInput"}
-SUPPORTED_STREAM_VERSIONS = {11, 13}
+from .compatibility_readers import SUPPORTED_STREAM_VERSIONS
 
 
 class UnsupportedStreamVersion(ContractError):

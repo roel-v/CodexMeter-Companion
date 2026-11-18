@@ -8,6 +8,12 @@ from typing import Any
 from .payloads import Payload
 
 
+TELEMETRY_REPLAY_TTL_SEC = 300
+ALERT_TTL_SEC = 60
+PENDING_ALERT_CAPACITY = 8  # Host backlog; firmware deduplicates across reconnects.
+EXPLICIT_INTENT_TTL_SEC = 60
+
+
 @dataclass
 class DeliveryState:
     observed_at: dict[str, float] = field(default_factory=dict)
@@ -92,7 +98,7 @@ def remember_desired(payload: Payload, state: DeliveryState) -> None:
         prune_alerts(state)
         if not any(p.data.get("id") == payload.data.get("id") for _, p in state.alerts):
             state.alerts.append((time.monotonic(), payload))
-            del state.alerts[:-8]
+            del state.alerts[:-PENDING_ALERT_CAPACITY]
     if payload.kind == "usage":
         state.last_usage = payload
     elif payload.kind == "activity":
@@ -107,7 +113,7 @@ def remember_desired(payload: Payload, state: DeliveryState) -> None:
 def should_send(payload: Payload, state: DeliveryState) -> bool:
     if payload.kind == "alert":
         timestamp = payload.data.get("t")
-        return type(timestamp) in (int, float) and 0 <= time.time() - timestamp <= 60
+        return type(timestamp) in (int, float) and 0 <= time.time() - timestamp <= ALERT_TTL_SEC
     latest = (
         state.last_usage
         if payload.kind == "usage"
@@ -133,7 +139,7 @@ def should_send(payload: Payload, state: DeliveryState) -> bool:
 def prune_alerts(state: DeliveryState, *, now=None):
     now = time.monotonic() if now is None else now
     state.alerts[:] = [
-        (created, p) for created, p in state.alerts if now - created < 60
+        (created, p) for created, p in state.alerts if now - created < ALERT_TTL_SEC
     ]
 
 
@@ -164,14 +170,14 @@ def negotiated_replay(state: DeliveryState, *, same_host: bool, now=None):
     ):
         if (
             payload is not None
-            and now - state.observed_at.get(kind, float("-inf")) < 300
+            and now - state.observed_at.get(kind, float("-inf")) < TELEMETRY_REPLAY_TTL_SEC
         ):
             result.append(payload)
     if same_host:
         current = state.device_state
         for key, (boot, revision, created) in list(state.explicit_intents.items()):
             if (
-                now - created >= 60
+                now - created >= EXPLICIT_INTENT_TTL_SEC
                 or boot != current.get("boot")
                 or revision != current.get("rev")
             ):

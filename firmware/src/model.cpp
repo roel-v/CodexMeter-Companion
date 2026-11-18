@@ -25,7 +25,7 @@ PayloadKind parse_payload(
     ActivityModel* activity,
     ControlModel* control) {
   size_t bytes = strlen(json);
-  if (bytes > 512 || !companion::valid_utf8(json, bytes)) return PAYLOAD_NONE;
+  if (bytes > companion::payload_limit || !companion::valid_utf8(json, bytes)) return PAYLOAD_NONE;
   BoundedJsonAllocator allocator;
   JsonDocument doc(&allocator);
   if (!exact_json(doc,json,bytes)) {

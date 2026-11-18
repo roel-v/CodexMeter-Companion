@@ -26,13 +26,16 @@ class Session {
   char host_[33]{}, previous_host_[33]{}, token_[33]{}, released_[33]{};
   Endpoint released_endpoint_ = Endpoint::None;
   uint32_t touched_ = 0, seq_ = 0;
-  char payload_[513]{}, revision_[11]{}, outcome_[24]{};
+  char payload_[payload_limit + 1]{}, revision_[11]{}, outcome_[24]{};
 };
+// Deduplication outlives the host 60-second alert TTL by a 5-second margin.
+constexpr uint32_t alert_dedup_ms = 65000;
+constexpr size_t alert_ledger_capacity = 32;
 class AlertLedger {
  public:
   // 0=new reserved entry, 1=duplicate, -1=full.
   int accept(const char* id, uint32_t now);
  private:
-  struct Entry { char id[13]{}; uint32_t at = 0; } entries_[32];
+  struct Entry { char id[13]{}; uint32_t at = 0; } entries_[alert_ledger_capacity];
 };
 }

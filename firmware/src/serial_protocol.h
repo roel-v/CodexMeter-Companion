@@ -1,10 +1,8 @@
 #pragma once
-#include <stddef.h>
+#include "protocol_limits.h"
 #include <stdint.h>
 
 namespace companion {
-constexpr size_t frame_limit = 640;
-constexpr size_t payload_limit = 512;
 // Fixed storage; overflow and timeout discard the entire frame through LF.
 class LineDecoder {
  public:

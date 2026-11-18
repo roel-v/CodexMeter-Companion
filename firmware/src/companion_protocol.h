@@ -25,7 +25,7 @@ class Protocol {
   bool raw_allowed() const;
  private:
   char boot_[17]{};
-  char reply_[641]{};
+  char reply_[frame_limit + 1]{};
   char staged_usb_[33]{}, staged_ble_[33]{};
   bool usb_ready_ = false, ble_ready_ = true;
   uint32_t usb_claim_q_ = 0, ble_claim_q_ = 0;

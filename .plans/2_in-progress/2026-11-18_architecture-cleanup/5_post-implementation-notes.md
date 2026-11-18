@@ -86,3 +86,12 @@ Removed the unused single-display BLE discovery/run loop and its private name fi
 sleep helper and connected-lookup wrapper. Production macOS lookup remains in multi-device discovery.
 Removed BLE delivery forwarding methods and the test-only inventory wrapper; consumers now call
 the common implementations directly. Validation: 79 affected tests passed.
+
+### Shared limits
+
+Protocol frame/application limits now own all corresponding host/firmware buffers and validators;
+ATT values retain a separate Bluetooth limit. Named delivery freshness, alert TTL/capacity and intent
+TTL preserve behavior; firmware's larger deduplication ledger and 5-second margin are documented.
+Compatibility diagnostics derive supported stream versions from the validator. Screen timeout uses
+its existing settings owner. Validation: 78 affected tests, then 30 protocol/delivery tests (including
+cross-language bound agreement) passed; native firmware harness passed after the final changes.

@@ -6,8 +6,11 @@ import struct
 import time
 from .companion_session import CompanionSession
 from .transport_types import Endpoint, TransportError
-from .companion_protocol import NegotiatedIdentity, ProtocolError
+from .companion_protocol import NegotiatedIdentity, ProtocolError, MAX_FRAME
 from .settings import RX_CHAR_UUID, TX_CHAR_UUID
+
+
+BLE_ATT_VALUE_LIMIT = 512
 
 
 class FragmentDecoder:
@@ -18,7 +21,7 @@ class FragmentDecoder:
         self.started = 0
 
     def feed(self, fragment):
-        if not 6 <= len(fragment) <= 512 or fragment[0] != 0x1E:
+        if not 6 <= len(fragment) <= BLE_ATT_VALUE_LIMIT or fragment[0] != 0x1E:
             self.buffer.clear()
             self.total = 0
             return None
@@ -30,7 +33,7 @@ class FragmentDecoder:
             self.total = total
             self.started = now
         if (
-            not 1 <= total <= 640
+            not 1 <= total <= MAX_FRAME
             or total != self.total
             or offset != len(self.buffer)
             or now - self.started >= 2
@@ -91,9 +94,9 @@ class BleWireChannel:
             )
             return
         logical = frame.removesuffix(b"\n")
-        if not 1 <= len(logical) <= 640:
+        if not 1 <= len(logical) <= MAX_FRAME:
             raise ProtocolError("BLE logical frame bounds")
-        capacity = min(512, max(0, getattr(self.client, "mtu_size", 23) - 3)) - 5
+        capacity = min(BLE_ATT_VALUE_LIMIT, max(0, getattr(self.client, "mtu_size", 23) - 3)) - 5
         if capacity < 1:
             raise TransportError("BLE MTU cannot carry fragment")
         async with self.lock:

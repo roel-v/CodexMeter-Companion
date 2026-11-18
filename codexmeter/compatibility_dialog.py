@@ -1,5 +1,6 @@
 """Compatibility status UI. All rendering occurs on the Tk thread."""
 import json
+from .compatibility_readers import SUPPORTED_STREAM_VERSIONS
 import tkinter as tk
 from tkinter import ttk
 from .compatibility import COMPONENTS
@@ -40,7 +41,7 @@ def diagnostic_report(snapshot):
     from . import __version__
     from .compatibility import safe_details, REASONS
     import re
-    report = {"codexmeter": __version__, "supported_stream_versions": [11, 13],
+    report = {"codexmeter": __version__, "supported_stream_versions": sorted(SUPPORTED_STREAM_VERSIONS),
               "version_provenance": "local executable metadata", "components": {}, "versions": {}}
     for key, row in snapshot.get("components", {}).items():
         if key not in COMPONENTS or not isinstance(row, dict):

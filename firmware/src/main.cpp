@@ -794,7 +794,7 @@ static void handle_raw_line(const char* buf) {
 #endif
 }
 
-static char usb_tx[641];
+static char usb_tx[companion::frame_limit + 1];
 static size_t usb_tx_size = 0, usb_tx_pos = 0;
 static uint32_t usb_tx_started = 0;
 static bool usb_tx_boundary = false;

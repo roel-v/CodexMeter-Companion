@@ -13,7 +13,7 @@
 #define TX_CHAR_UUID "4c41555a-4465-7669-6365-000000000003"
 #define REQ_CHAR_UUID "4c41555a-4465-7669-6365-000000000004"
 #define IDENTITY_CHAR_UUID "4c41555a-4465-7669-6365-000000000005"
-#define RX_BUF_SIZE 641
+static constexpr size_t RX_BUF_SIZE = companion::frame_limit + 1;
 #define RX_QUEUE_SIZE 1
 
 static NimBLEServer* server = nullptr;
@@ -33,7 +33,7 @@ static uint16_t connection_handle = BLE_HS_CONN_HANDLE_NONE, connection_mtu = 23
 static companion::FragmentDecoder fragments;
 static bool negotiated = false;
 static bool identity_read = false;
-static char pending_reply[641], pending_busy[160];
+static char pending_reply[companion::frame_limit + 1], pending_busy[160];
 static size_t reply_size = 0, reply_offset = 0;
 static uint32_t reply_started = 0;
 static SemaphoreHandle_t dispatch_lock() {
@@ -87,7 +87,7 @@ class RxCallbacks : public NimBLECharacteristicCallbacks {
     if (info.getConnHandle()!=connection_handle) return;
     std::string val = chr->getValue();
     size_t len = val.length();
-    if (!len || len>512) return;
+    if (!len || len>companion::ble_att_value_limit) return;
 
     bool dropped = false;
     portENTER_CRITICAL(&rx_mux);
@@ -101,7 +101,7 @@ class RxCallbacks : public NimBLECharacteristicCallbacks {
       data=fragments.data(); len=fragments.size();
     } else {
       fragments.clear();
-      if (len>512 || memchr(data,0,len)) { portEXIT_CRITICAL(&rx_mux); return; }
+      if (len>companion::ble_att_value_limit || memchr(data,0,len)) { portEXIT_CRITICAL(&rx_mux); return; }
     }
     if(memchr(data,0,len)) { fragments.clear();portEXIT_CRITICAL(&rx_mux);return; }
     if (rx_count==RX_QUEUE_SIZE) { portEXIT_CRITICAL(&rx_mux); return; }
@@ -164,7 +164,7 @@ void ble_service_tick() {
     start_advertising();
   }
   // One notification per loop; minimum-MTU fragment is 15 logical bytes.
-  uint8_t fragment[512]; size_t length=0; uint16_t handle=BLE_HS_CONN_HANDLE_NONE;
+  uint8_t fragment[companion::ble_att_value_limit]; size_t length=0; uint16_t handle=BLE_HS_CONN_HANDLE_NONE;
   portENTER_CRITICAL(&rx_mux);
   if (connected && pending_busy[0]) {
     strcpy(pending_reply,pending_busy); pending_busy[0]=0;
@@ -246,7 +246,7 @@ void ble_service_fence(const char* error) {
   portEXIT_CRITICAL(&rx_mux);
 }
 void ble_service_reply(const char* reply) {
-  if(!reply || !*reply || strlen(reply)>640)return;
+  if(!reply || !*reply || strlen(reply)>companion::frame_limit)return;
   portENTER_CRITICAL(&rx_mux);
   if(connected && !reply_size && !pending_busy[0]) {
     strcpy(pending_reply,reply);reply_size=strlen(reply);reply_offset=0;reply_started=millis();

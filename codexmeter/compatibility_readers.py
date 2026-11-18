@@ -5,6 +5,8 @@ import math
 import sqlite3
 from .compatibility import ContractError
 
+SUPPORTED_STREAM_VERSIONS = frozenset({11, 13})
+
 def schema(db, tables, field):
     for table, required in tables.items():
         columns = {row[1] for row in db.execute('PRAGMA table_info("' + table + '")')}

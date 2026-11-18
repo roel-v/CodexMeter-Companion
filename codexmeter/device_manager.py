@@ -14,7 +14,7 @@ from .device_registry import DeviceConfig, default_legacy_device, is_full_device
 from .payloads import Payload
 from .delivery import remember_desired
 from .queueing import put_latest
-from .settings import DEVICE_NAME
+from .settings import DEVICE_NAME, AUTO_SCREEN_TIMEOUT_SEC
 from .supervision import supervise
 
 log = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class DeviceManager:
         host_id: str | None = None,
         registry=None,
         policy_detector=None,
-        screen_timeout_sec=60,
+        screen_timeout_sec=AUTO_SCREEN_TIMEOUT_SEC,
         policy=None,
         clock=time.monotonic,
         retry_wait=None,
