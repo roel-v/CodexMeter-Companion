@@ -41,9 +41,11 @@ def check_device_commands(root):
         assert str(controls.nametowidget('retry').cget('state'))=='normal'
         tree.selection_set(second);root.update();assert 'Settings changed' not in text()
         tree.selection_set(first);root.update();assert 'Settings changed' in text()
-        outcome.clear();outcome.update(status='applied',readback_error='unavailable')
+        outcome.clear();outcome.update(status='applied',readback_pending=True)
         controls.nametowidget('retry').invoke()
         until(lambda:'Applied (display acknowledged).' in text())
+        outcome.update(readback_pending=False,readback_error='unavailable')
+        until(lambda:'readback unavailable' in text())
         assert len(requests)==2 and 'readback unavailable' in text()
         outcome.clear();outcome.update(status='unknown')
         controls.nametowidget('brightness').invoke()

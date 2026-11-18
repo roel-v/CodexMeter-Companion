@@ -13,12 +13,17 @@ def is_busy(reason):
     return any(value in (reason or '') for value in BUSY_REASONS)
 
 
+def declares_negotiation(raw):
+    return bool(raw) and any(key in raw for key in ('usb', 'boot', 'ble_owner'))
+
+
 def require_supported(identity, transport):
     from .companion_protocol import ProtocolError
     if identity.raw['usb'] != WIRE_VERSION or not application_supported(identity.raw['app']):
         raise ProtocolError(f'{transport} firmware upgrade required (wire/app v1)')
     if identity.metadata.model not in SUPPORTED_MODELS:
         raise ProtocolError(f'unsupported {transport} display model')
-    if transport == 'bluetooth' and identity.raw.get('ble_owner') != 1:
+    if transport == 'bluetooth' and (type(identity.raw.get('ble_owner')) is not int
+                                     or identity.raw['ble_owner'] != WIRE_VERSION):
         raise ProtocolError('Bluetooth ownership protocol required')
     return identity

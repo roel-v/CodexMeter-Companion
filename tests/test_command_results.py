@@ -52,6 +52,28 @@ def test_ack_survives_readback_failure():
     asyncio.run(run())
 
 
+def test_ack_is_visible_while_readback_is_pending():
+    async def run():
+        m,state=setup_manager();key,p=await admit(m)
+        s=UsbSession(discovered(),H,channel_factory=FakeChannel);await s.open()
+        entered=asyncio.Event();release=asyncio.Event()
+        async def read():
+            entered.set();await release.wait();raise TransportError('readback failed')
+        s.read_state=read
+        task=asyncio.create_task(DeliveryPump(state,s).deliver(p))
+        try:
+            await asyncio.wait_for(entered.wait(),1)
+            result=state.commands.get(key)
+            assert result['status']=='applied' and result['readback_pending']
+            release.set()
+            with pytest.raises(TransportError):await task
+            result=state.commands.get(key)
+            assert result['status']=='applied' and not result['readback_pending'] and result['readback_error']
+        finally:
+            release.set();await s.close(release=False)
+    asyncio.run(run())
+
+
 def test_unknown_cannot_replay():
     async def run():
         m,state=setup_manager();key,p=await admit(m)

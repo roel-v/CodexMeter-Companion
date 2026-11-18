@@ -18,6 +18,7 @@ class CommandRecord:
     reason: str = ''
     readback: dict | None = None
     readback_error: str | None = None
+    readback_pending: bool = False
 
 
 class CommandResults:
@@ -72,6 +73,7 @@ class CommandResults:
     def readback(self, payload, state=None, error=None):
         record = self.records.get(payload.command_id)
         if record:
+            record.readback_pending = False
             record.readback = dict(state) if state is not None else None
             record.readback_error = error
 
@@ -84,4 +86,5 @@ class CommandResults:
                 'value': record.payload.data.get('value', record.payload.data.get('on')),
                 'status': record.status, 'reason': record.reason,
                 'readback': dict(record.readback) if record.readback is not None else None,
+                'readback_pending': record.readback_pending,
                 'readback_error': record.readback_error}

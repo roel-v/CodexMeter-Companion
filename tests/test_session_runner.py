@@ -63,3 +63,26 @@ def test_adapter_lifecycle(monkeypatch, transport, stage):
         elif stage != 'normal':
             assert slot.state.last_error if transport == 'usb' else isinstance(result[0],RuntimeError)
     asyncio.run(scenario())
+
+
+def test_manager_identity_is_lazy_cached_and_shared_with_added_workers(tmp_path, monkeypatch):
+    from tests.test_mixed_displays import manager, config
+    from codexmeter.device_registry import DeviceRegistry
+    import codexmeter.host_identity as identities
+    calls=[]
+    monkeypatch.setattr(identities,'load_host_id',lambda: calls.append(1) or 'c'*32)
+    m=manager([config()])
+    assert calls==[]
+    m.registry=DeviceRegistry(tmp_path/'devices.json')
+    m.registry.upsert(config());m.registry.save()
+    async def scenario():
+        await m.update_registry({'action':'adopt','device_id':config(2).device_id,'config':config(2).to_json()})
+        m.registry.upsert(config(3));m.registry.save()
+        await m.reload_devices()
+        assert calls==[]
+        for worker in m._workers:
+            assert worker.transport.host_id_provider()=='c'*32
+        for coordinator in m.coordinators:
+            assert coordinator.usb_factory().host_id=='c'*32
+        assert calls==[1]
+    asyncio.run(scenario())

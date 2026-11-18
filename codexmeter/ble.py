@@ -10,6 +10,7 @@ import time
 from typing import Any, Callable
 
 from .payloads import Payload
+from .device_policy import declares_negotiation
 from .settings import (
     BLE_ACK_TIMEOUT_SEC,
     BLE_CONNECT_TIMEOUT_SEC,
@@ -235,7 +236,7 @@ class BleTransport:
                 if identity_validator is not None:
                     identity_validator(identity)
                 state.observed_device_id = identity.device_id
-                if identity.raw and identity.raw.get('ble_owner') == 1:
+                if declares_negotiation(identity.raw):
                     return await self._negotiated(client,identity,queue,state,stop_event)
             ack_tracker: BleAckTracker | None = BleAckTracker()
             try:

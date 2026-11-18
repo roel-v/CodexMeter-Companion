@@ -43,3 +43,21 @@ def test_busy_policy():
     assert all(is_busy('TransportError: '+reason) for reason in ('busy_usb','busy_ble','busy_maintenance'))
     assert not is_busy(None) and not is_busy('timeout')
 
+
+@pytest.mark.parametrize('owner',[None,0,2,True])
+def test_declared_ble_negotiation_never_downgrades_to_legacy(owner):
+    from tests.test_ble import FakeLifecycleClient, FakeClientTransport
+    from codexmeter.delivery import DeliveryState
+    raw=identity_data()
+    if owner is not None: raw['ble_owner']=owner
+    class Client(FakeLifecycleClient):
+        async def read_gatt_char(self,uuid):return json.dumps(raw).encode()
+        async def start_notify(self,*args):raise AssertionError('Unsupported device must not subscribe or send')
+    async def run():
+        client=Client()
+        transport=FakeClientTransport(client,host_id_provider=lambda:'d'*32)
+        with pytest.raises(ProtocolError):
+            await transport.connect_and_write('fake',asyncio.Queue(),DeliveryState(),asyncio.Event(),require_identity=True)
+        assert client.disconnect_calls==1
+    asyncio.run(run())
+

@@ -46,3 +46,12 @@ Shared header preserves unchanged/changed/null-current-text and font fallback be
 All three firmware targets built successfully. S3 RAM 127304, flash 1644887 (-228 versus prior capture-fix build);
 C6 RAM 54620, flash 2416660 (-324). Ball figures are recorded in the final verification table below.
 No layout, font asset or board behavior was changed. Existing compiler warnings remain in the retained build log.
+
+### Phase 8 final-review corrections
+A terminal ACK/result can arrive at the panel before settings readback finishes. Added readback_pending to keep polling
+that supplemental result without downgrading the proven ACK. Actual widget diagnostic now waits across this race.
+An added adapter regression reproduced four malformed BLE ownership declarations reaching subscription/legacy handling.
+The adapter now routes any negotiation declaration through strict support validation, including rejecting boolean owners.
+The four red cases passed after the fix; focused BLE/policy suite: 59 passed. Added lazy/cached host identity coverage
+through actual initial/adopted/reloaded workers. Final full Python run: 497 passed, one inapplicable roots/account case
+skipped. The first successful candidate build predates the BLE correction; it is not the final tested candidate.

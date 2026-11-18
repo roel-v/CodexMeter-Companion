@@ -77,6 +77,9 @@ class DeliveryPump:
         sweep_commands(state)
 
     async def _readback(self, payload):
+        record = self.state.commands.records.get(payload.command_id)
+        if record:
+            record.readback_pending = True
         try:
             self.state.device_state = {
                 **await self.session.read_state(),

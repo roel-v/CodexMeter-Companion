@@ -128,7 +128,8 @@ def show_devices(parent, *, sender=None):
             refreshing=True;launch({'type':'ping'},('status',))
     def query(key,record):
         tag=('result',key,record['seq'],record['id'])
-        if record['id'] and tag not in pending and (record.get('result') or {}).get('status') not in TERMINAL:
+        outcome = record.get('result') or {}
+        if record['id'] and tag not in pending and (outcome.get('status') not in TERMINAL or outcome.get('readback_pending')):
             pending.add(tag);launch({'type':'command_result','device_id':key,'command_id':record['id']},tag)
     def poll():
         nonlocal refreshing
