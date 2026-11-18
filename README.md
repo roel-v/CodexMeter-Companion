@@ -180,6 +180,7 @@ The original macOS and Waveshare S3 code is retained. The
 For source builds, use the [Windows build guide](README.windows.md). The scripts
 use D: for builds and caches and E: for retained bundles in the development setup;
 see [location configuration](README.windows.md#locations) when building elsewhere.
+For contributors, [code structure](docs/architecture.md) explains the display, transport and data-reader boundaries.
 The maintained branch is `main`.
 
 Thanks to the upstream authors for the application, firmware and themes.

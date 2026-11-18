@@ -10,6 +10,15 @@ recorded separately; firmware changes are noted where applicable.
 - Keep token readings working when quota requests fail and running/waiting counts when unread history fails.
 - Validate chat-owner coverage; distinguish unknown task counts from zero on both displays.
 - Matching firmware is required for reliable unknown/partial task counts on older devices.
+- Fix separate control-panel health polling and recovery when the bridge is unavailable.
+- Use consistent device identity, board capabilities and token/cost validity across USB, Bluetooth and both displays.
+- Wire real Windows power notifications and reader generations into compatibility monitoring;
+  reject obsolete results and require fresh inventory reads before clearing an outage.
+- Separate common delivery/session logic from USB/Bluetooth backends and remove obsolete internal shims.
+- Share firmware task freshness and checked cost totals; retain totals when breakdowns are unavailable.
+- Generate Windows/firmware version metadata from the package version and test protocol-bound agreement.
+- Preserve telemetry during Bluetooth maintenance handover, prevent capture/discovery port races,
+  and finish native Bluetooth disconnect before cancelling a worker.
 - No automatic installation, restart or diagnostic transmission.
 2026-11-14 — windows-c6-2026.11.14 (Windows 3.12.3.1)
 - Fix release checks after the repository rename to CodexMeter-Companion by

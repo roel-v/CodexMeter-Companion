@@ -219,3 +219,30 @@ Suggested execution order:
 Do not mix this cleanup with removal of supported boards, changes to transport ownership semantics, a new
 release-numbering policy or a visual redesign. Preserve the existing fault/maintenance test coverage and
 repeat the USB/BLE matrix on both real boards after implementation.
+
+## Remediation disposition — 18 November 2026
+
+The observations above describe the audit baseline; their old locations are retained for traceability.
+See [current code structure](architecture.md) for the resulting boundaries.
+
+| Finding | Disposition |
+| --- | --- |
+| 1 | Fixed top-level health projection; source and packaged panel acceptance cover worker failure/recovery. |
+| 2 | Canonical identity parser/serializer and board descriptors; conflicting legacy aliases are rejected. |
+| 3 | Shared token/cost semantics, checked sums and total availability; renderer formatting stays model-specific. |
+| 4 | Shared CompanionSession and DeliveryPump; USB and BLE adapters are siblings. |
+| 5 | Neutral manager/slot, backend discovery/worker, public maintenance APIs, one screen-policy owner. |
+| 6 | TransportSession and WireChannel describe and annotate their actual consumers. |
+| 7 | Native power registration, source generations/account contexts, stale-result fencing and fresh inventory evidence wired into production. |
+| 8 | Explicit board capabilities, separate manual orientation, no Ball dummy UI/power/IMU subsystem; shared task freshness. |
+| 9 | Removed obsolete manager/discovery/run paths, forwarding wrappers and test-only inventory wrapper. Shared waits retained in async_utils. |
+| 10 | Shared wire/delivery/view limits, validator-owned stream versions and generated release metadata. Intentional ATT, ledger and timeout differences retained. |
+| 11 | Canonical devices status throughout tools/UI; legacy JSON/ACK and maintenance/rollback support retained deliberately. |
+
+Dependency review: Bleak/CoreBluetooth remain required for BLE/macOS, pyserial for Windows USB, pystray/Pillow for
+Windows tray/UI, and WinRT radios for the existing Bluetooth recovery feature. None is an obsolete cleanup dependency.
+Firmware theme libraries remain required by C6/original S3. This cleanup removes internal shims, not supported devices.
+
+Earlier unit-only evidence did not establish real lifecycle wiring. The cleanup adds production-path tests and native
+power registration; physical PC sleep is still not tested. Full test/build/device results and any limits are recorded
+in the architecture-cleanup work item's post-implementation notes. Publishing is a separate action.
