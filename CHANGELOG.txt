@@ -3,7 +3,7 @@ CodexMeter Companion changelog
 Entries are grouped by release date, newest first. Application versions are
 recorded separately; firmware changes are noted where applicable.
 
-2026-11-18 — unreleased compatibility candidate (Windows and firmware 3.12.3.4)
+2026-11-18 — unreleased compatibility and architecture cleanup (Windows and firmware 3.12.3.4)
 - Detect incompatible Codex chat, quota, database and token formats independently.
 - Add persistent source-health details, one-time tray warnings and local diagnostic copying.
 - Notify once after five minutes of unexplained missing readings, with sleep/closed-Codex suppression.
@@ -18,7 +18,8 @@ recorded separately; firmware changes are noted where applicable.
 - Share firmware task freshness and checked cost totals; retain totals when breakdowns are unavailable.
 - Generate Windows/firmware version metadata from the package version and test protocol-bound agreement.
 - Preserve telemetry during Bluetooth maintenance handover, prevent capture/discovery port races,
-  and finish native Bluetooth disconnect before cancelling a worker.
+  finish native Bluetooth disconnect before cancelling a worker, and await cancelled USB probe cleanup.
+- Bound C6 screenshot writes to USB capacity, preserve rejected capture evidence, and restore pages after capture failures.
 - No automatic installation, restart or diagnostic transmission.
 2026-11-14 — windows-c6-2026.11.14 (Windows 3.12.3.1)
 - Fix release checks after the repository rename to CodexMeter-Companion by
