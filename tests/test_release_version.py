@@ -26,3 +26,8 @@ def test_invalid_release_metadata_fails_before_packaging(tmp_path, source):
     with pytest.raises(ValueError):
         version_module.firmware_header(tmp_path, tmp_path / "generated")
     assert not (tmp_path / "generated/release_version.h").exists()
+
+
+def test_update_dialog_uses_canonical_application_version():
+    from codexmeter.update_dialog import APP_VERSION
+    assert APP_VERSION == __version__
