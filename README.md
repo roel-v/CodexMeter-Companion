@@ -2,7 +2,7 @@
 
 Keep your Codex quota, token usage and chat status on a small display beside your
 computer. The Windows companion runs in the system tray and sends updates over
-Bluetooth to a **Waveshare C6**, a **Spotpear Ball**, or both.
+USB or Bluetooth LE to a **Waveshare C6**, a **Spotpear Ball**, or both.
 
 <table>
   <tr><th>Waveshare C6</th><th>Spotpear Ball</th></tr>
@@ -23,7 +23,7 @@ installer or separate Python installation is needed.
 
 ## Get started
 
-You need Windows 10/11 with Bluetooth LE, Codex installed and signed in, a
+You need Windows 10/11, Codex installed and signed in, a
 supported display, and a USB data cable to flash its firmware.
 
 1. Download **CodexMeter.exe** and the firmware for your display from the
@@ -40,8 +40,8 @@ supported display, and a USB data cable to flash its firmware.
 | Spotpear **ESP32-S3 1.28-inch Ball/BOX V2** | `spotpear-ball-v2-factory.bin` | 240 × 240 round LCD |
 
 Use the image for your exact board; these firmwares are not interchangeable.
-The release includes flashing instructions and SHA-256 checksums. USB supplies
-power; usage updates travel over Bluetooth. No separate API key is needed, and
+The release includes flashing instructions and SHA-256 checksums. In Auto mode the companion prefers a USB data connection and falls back to
+Bluetooth LE when available. Choose USB only on a PC without Bluetooth. No separate API key is needed, and
 Codex credentials stay on the computer.
 
 ## What you can see

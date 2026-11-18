@@ -1,6 +1,6 @@
 # CodexMeter for Windows, Waveshare C6 and Spotpear Ball
 
-This local port adds a Windows control panel and background Bluetooth bridge to
+This local port adds a Windows control panel and background USB and Bluetooth bridge to
 [tomatoeggs/CodexMeter](https://github.com/tomatoeggs/CodexMeter), plus an English,
 memory-conscious firmware target for **ESP32-C6-Touch-AMOLED-2.16(-EN)**.
 The original firmware target is for the **S3**, not the C6.
@@ -30,7 +30,7 @@ an optional numeric `.N` suffix for another release on the same date.
 
 ## Requirements
 
-- Windows 10/11 with Bluetooth LE enabled.
+- Windows 10/11. A USB data connection works on PCs without Bluetooth. Enable Bluetooth LE for wireless operation.
 - Codex installed and signed in with the account whose limits you want to show.
   The bridge uses the local Codex app-server; no separate API key is needed.
 - The standalone executable needs no Python installation. Building from source
@@ -143,15 +143,14 @@ backup, verified against the board before flashing, is in
 `../backups/20261017-COM6-original/`; that folder includes restore instructions.
 Hardware test evidence is in `dist/c6/hardware-test-20261017/`.
 
-1. Power the flashed board and enable Windows Bluetooth.
-2. Click **Scan displays** in the app. Find `CodexMeter-XXXXXX`.
-3. Enter that six-character display ID, give it a name, and click
+1. Connect the flashed board with a USB data cable, or enable Windows Bluetooth for wireless operation.
+2. Click **Scan displays** in the app. Find the full hardware ID for USB registration or the six-character ID for Bluetooth registration.
+3. Enter the display ID, choose the connection mode, give it a name, and click
    **Register display**.
 4. Stop and start the bridge to reload the registered device list.
 5. Click **Test alert**, then **Read usage** / **Status** to check both paths.
 
-The bridge connects directly through Bluetooth LE. A Bluetooth COM port is not
-used. It can reconnect to registered devices and handle multiple displays.
+The bridge uses the USB serial port for wired operation and Bluetooth LE for wireless operation. Auto mode prefers a stable USB connection. It can reconnect to registered devices and handle multiple displays.
 
 ## Task alerts and optional startup
 
@@ -356,7 +355,7 @@ and health records. Firmware bundles and evidence are under
 Use the Windows executable and the firmware for your specific display from the same release. The C6 and Ball use
 separate images; never bypass the flash tool's chip-family check.
 
-The 3.12.3.4 candidate validates v1 payloads and advertises the metric_validity capability. With its matching desktop,
+Version 3.12.3.5 validates v1 payloads and advertises the metric_validity capability. With its matching desktop,
 both models distinguish unknown task counts from zero and keep available counts visible when unread history fails.
 Older desktop clients retain their known fields. Older firmware needs updating for reliable partial/unknown counts;
 the desktop's device status explains that limitation. Connection or ACK alone does not establish data compatibility.
