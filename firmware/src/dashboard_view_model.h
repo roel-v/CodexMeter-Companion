@@ -5,6 +5,8 @@
 #include "model.h"
 #include "battery_status.h"
 
+constexpr uint32_t activity_freshness_ms = 15000UL;
+
 enum class DashboardDataState : uint8_t {
   Waiting = 0,
   Ready,

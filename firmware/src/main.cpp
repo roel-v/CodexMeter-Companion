@@ -17,7 +17,7 @@
 #include "display_rotation.h"
 #include "display_panel.h"
 #include "identity.h"
-#include "imu.h"
+#include "orientation.h"
 #include "model.h"
 #include "power.h"
 #include "theme_registry.h"
@@ -198,7 +198,7 @@ static void lv_flush(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map)
     feed_watchdog();
   }
   display_rotation_draw(
-      gfx, area->x1, area->y1, w, h, (uint16_t*)px_map, imu_rotation_quadrant());
+      gfx, area->x1, area->y1, w, h, (uint16_t*)px_map, orientation_rotation_quadrant());
   lv_display_flush_ready(disp);
 }
 
@@ -228,6 +228,7 @@ static void apply_brightness() {
 }
 
 static void refresh_battery_ui(bool force) {
+#if CODEXMETER_HAS_POWER
   const int battery_percent = power_battery_percent();
   const bool charging = power_is_charging();
   if (!force && displayed_battery_valid &&
@@ -240,6 +241,7 @@ static void refresh_battery_ui(bool force) {
   displayed_battery_charging = charging;
   displayed_battery_valid = true;
   ui_set_battery(battery_percent, charging);
+#endif
 }
 
 static void display_init() {
@@ -334,8 +336,12 @@ static void set_screen_on(bool on, const char* reason, bool legacy = false) {
 
   screen_on = on;
   if (screen_on) {
+#if CODEXMETER_HAS_POWER
     power_set_display_active(true);
-    imu_set_display_active(true);
+#endif
+#if CODEXMETER_HAS_IMU
+    orientation_set_display_active(true);
+#endif
     refresh_battery_ui(true);
     gfx->displayOn();
     apply_brightness();
@@ -345,8 +351,12 @@ static void set_screen_on(bool on, const char* reason, bool legacy = false) {
     device_logf("INFO", "screen on %s", policy ? "policy" : "manual");
   } else {
     ui_set_display_active(false);
-    imu_set_display_active(false);
+#if CODEXMETER_HAS_IMU
+    orientation_set_display_active(false);
+#endif
+#if CODEXMETER_HAS_POWER
     power_set_display_active(false);
+#endif
     gfx->displayOff();
     device_logf("INFO", "screen off %s", policy ? "policy" : "manual");
   }
@@ -362,7 +372,9 @@ static void set_brightness_percent_internal(
   device_settings_set_brightness(brightness_percent);
   apply_brightness();
   if (show_overlay) {
+#if CODEXMETER_HAS_SETTINGS
     ui_show_brightness(brightness_percent);
+#endif
   }
   device_logf(
       "INFO", "brightness %d reason=%s", brightness_percent,
@@ -400,13 +412,15 @@ static void redraw_for_rotation() {
 }
 
 static void handle_orientation() {
-  imu_tick();
+#if CODEXMETER_HAS_IMU
+  orientation_tick();
+#endif
 
-  uint8_t rotation = imu_rotation_quadrant();
+  uint8_t rotation = orientation_rotation_quadrant();
   if (rotation != displayed_rotation) {
     displayed_rotation = rotation;
     device_logf("INFO", "display rotation=%u deg=%s", rotation,
-                imu_rotation_label(rotation));
+                orientation_rotation_label(rotation));
     redraw_for_rotation();
   }
 
@@ -457,7 +471,7 @@ static const char* handle_json(const char* json, const char* revision) {
   }
   // Parsing and ownership/revision checks completed before any model mutation.
   if(kind==PAYLOAD_CONTROL && !strcmp(next_control.command,"rotation")) {
-    if(!imu_set_rotation_quadrant(next_control.value/90))return "unsupported";
+    if(!orientation_set_rotation_quadrant(next_control.value/90))return "unsupported";
   }
   if(kind==PAYLOAD_USAGE)usage=next_usage;
   if(kind==PAYLOAD_ALERT)alert=next_alert;
@@ -568,7 +582,7 @@ static void send_screenshot() {
       (unsigned long)buf_size);
   Serial.flush();
   const uint16_t* frame =
-      display_rotation_frame((const uint16_t*)sbuf, imu_rotation_quadrant());
+      display_rotation_frame((const uint16_t*)sbuf, orientation_rotation_quadrant());
   const uint8_t* frame_bytes = (const uint8_t*)frame;
   uint32_t written = 0;
   while (written < buf_size) {
@@ -624,7 +638,9 @@ static void handle_raw_line(const char* buf) {
         activity_apply_demo(&activity, 0);
         ui_update_activity(activity);
         device_logf("INFO", "serial demo_idle");
-      } else if (strcmp(buf, "power") == 0) {
+      }
+#if CODEXMETER_HAS_POWER
+      else if (strcmp(buf, "power") == 0) {
         power_refresh_and_log();
         refresh_battery_ui(true);
       } else if (strncmp(buf, "demo_battery ", 13) == 0) {
@@ -640,7 +656,9 @@ static void handle_raw_line(const char* buf) {
         } else {
           Serial.println("DEMO_BATTERY_INVALID");
         }
-      } else if (strcmp(buf, "screen_on") == 0) {
+      }
+#endif
+      else if (strcmp(buf, "screen_on") == 0) {
         set_screen_on(true, "serial");
       } else if (strcmp(buf, "screen_off") == 0) {
         set_screen_on(false, "serial");
@@ -652,7 +670,9 @@ static void handle_raw_line(const char* buf) {
         adjust_brightness(-CODEXMETER_BRIGHTNESS_STEP, "serial");
       } else if (strncmp(buf, "brightness ", 11) == 0) {
         set_brightness_percent(atoi(buf + 11), "serial");
-      } else if (strcmp(buf, "theme") == 0) {
+      }
+#if CODEXMETER_HAS_SETTINGS
+      else if (strcmp(buf, "theme") == 0) {
         Serial.printf(
             "THEME %s %s\n", ui_theme_id(), ui_theme_name());
       } else if (strcmp(buf, "theme_list") == 0) {
@@ -710,8 +730,10 @@ static void handle_raw_line(const char* buf) {
         } else {
           Serial.println("VOLUME_INVALID");
         }
-      } else if (strcmp(buf, "imu") == 0) {
-        imu_print_status(Serial);
+      }
+#endif
+      else if (strcmp(buf, "imu") == 0 || strcmp(buf, "orientation") == 0) {
+        orientation_print_status(Serial);
       } else if (strcmp(buf, "identity") == 0) {
         companion_protocol.identity(companion::Endpoint::Usb);
         Serial.print("IDENTITY ");
@@ -731,7 +753,11 @@ static void handle_raw_line(const char* buf) {
             (unsigned long)host_age, (unsigned long)usage_age,
             watchdog_enabled ? 1 : 0, ui_is_waiting() ? 1 : 0);
       } else if (strcmp(buf, "rotate auto") == 0) {
-        imu_set_auto_rotation(true);
+#if CODEXMETER_HAS_IMU
+        orientation_set_auto_rotation(true);
+#else
+        Serial.println("UNSUPPORTED");
+#endif
       } else if (strncmp(buf, "rotate ", 7) == 0) {
         int degrees = 0;
         int quadrant = -1;
@@ -746,7 +772,7 @@ static void handle_raw_line(const char* buf) {
             quadrant = 3;
           }
         }
-        if (quadrant >= 0 && imu_set_rotation_quadrant((uint8_t)quadrant)) {
+        if (quadrant >= 0 && orientation_set_rotation_quadrant((uint8_t)quadrant)) {
           Serial.printf("ROTATION %d\n", quadrant);
         } else {
           Serial.println("ROTATION_INVALID");
@@ -763,6 +789,9 @@ static void handle_raw_line(const char* buf) {
         device_log_clear();
         Serial.println("LOGS_CLEARED");
       }
+#if !CODEXMETER_HAS_SETTINGS
+      else { Serial.println("UNSUPPORTED"); }
+#endif
 }
 
 static char usb_tx[641];
@@ -935,7 +964,7 @@ static void handle_button() {
 #endif
 }
 
-static void handle_ble_screen_policy() {
+static void handle_host_screen_policy() {
   if (serial_ui_test_ms && millis() - serial_ui_test_ms < 120000) return;
   // A BLE link alone is not proof that the companion is supplying data.
   // Keep the boot screen until the first valid data payload, and return to it
@@ -953,7 +982,10 @@ static companion::DisplayState current_display_state() {
   static bool initialized=false;
   companion::DisplayState state;
   state.page=ui_page(); state.brightness=brightness_percent;
-  state.rotation=imu_rotation_quadrant()*90; state.auto_rotation=imu_auto_rotation_enabled();
+  state.rotation=orientation_rotation_quadrant()*90; state.auto_rotation=false;
+#if CODEXMETER_HAS_IMU
+  state.auto_rotation=orientation_auto_rotation_enabled();
+#endif
   state.manual_on=manual_screen_on; state.policy_on=policy_screen_on; state.screen_on=screen_on;
   if (initialized && (state.page!=previous.page || state.brightness!=previous.brightness ||
       state.rotation!=previous.rotation || state.auto_rotation!=previous.auto_rotation || state.manual_on!=previous.manual_on)) {
@@ -1012,8 +1044,10 @@ void setup() {
   pinMode(CODEXMETER_BUTTON_RIGHT_PIN, INPUT_PULLUP);
   device_settings_init();
   brightness_percent = device_settings_get().brightness_percent;
+#if CODEXMETER_HAS_POWER
   power_init();
-  imu_init();
+#endif
+  orientation_init();
   display_init();
   UiSystemHooks ui_hooks{};
   ui_hooks.apply_brightness = settings_apply_brightness;
@@ -1052,8 +1086,10 @@ void loop() {
     ui_tick();
   }
   device_settings_tick();
+#if CODEXMETER_HAS_POWER
   power_tick();
   if (power_take_state_changed()) refresh_battery_ui(false);
+#endif
   ble_service_tick();
   handle_button();
   touch_input_tick(screen_on);
@@ -1092,7 +1128,7 @@ void loop() {
   if (now - last_background_policy_ms >=
       CODEXMETER_BACKGROUND_POLICY_POLL_MS) {
     last_background_policy_ms = now;
-    handle_ble_screen_policy();
+    handle_host_screen_policy();
     if (usage.valid && now - last_usage_ms > CODEXMETER_STALE_AFTER_MS) {
       strlcpy(usage.status, "stale", sizeof(usage.status));
       ui_update_usage(usage);

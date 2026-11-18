@@ -3,6 +3,7 @@
 #include "wire_json.h"
 #include "model.h"
 #include "token_view_model.h"
+#include "dashboard_view_model.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -34,6 +35,17 @@ static std::string dispatch(Protocol& p,const std::string& s,uint32_t at=100,End
 }
 static void contains(const std::string& s,const char* expected){if(s.find(expected)==std::string::npos){fprintf(stderr,"Expected %s, got %s\n",expected,s.c_str());abort();}}
 int main() {
+  {
+    UsageModel usage; ActivityModel activity;
+    activity.valid=true; activity.running_count=2; activity.received_ms=100;
+    auto view=build_dashboard_view_model(usage,activity,-1,false,101);
+    assert(view.running_count==2 && view.waiting_count==-1 && view.done_count==-1);
+    activity.chat_counts_valid=true;activity.waiting_count=3;activity.done_count=-1;
+    view=build_dashboard_view_model(usage,activity,-1,false,101);
+    assert(view.running_count==2 && view.waiting_count==3 && view.done_count==-1);
+    view=build_dashboard_view_model(usage,activity,-1,false,15100);
+    assert(view.running_count==-1 && view.waiting_count==-1 && view.done_count==-1);
+  }
   {
     TokenBreakdown b;
     auto total=token_display_row(b,3,true,123);

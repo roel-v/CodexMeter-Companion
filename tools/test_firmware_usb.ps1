@@ -8,7 +8,7 @@ $json=Join-Path $BuildRoot 'libdeps\waveshare_c6_amoled_216\ArduinoJson\src'
 $source=Join-Path $repo 'firmware\src'
 Push-Location $out
 try {
-  $compile='call "'+$VcVars+'" >nul && cl /nologo /std:c++17 /EHsc /W4 /D_CRT_SECURE_NO_WARNINGS /I"'+$repo+'\tests\firmware_native" /I"'+$source+'" /I"'+$json+'" "'+$repo+'\tests\firmware_usb_protocol.cpp" "'+$source+'\serial_protocol.cpp" "'+$source+'\companion_session.cpp" "'+$source+'\companion_protocol.cpp" "'+$source+'\model.cpp" /Fe:firmware_usb_protocol.exe'
+  $compile='call "'+$VcVars+'" >nul && cl /nologo /std:c++17 /EHsc /W4 /D_CRT_SECURE_NO_WARNINGS /I"'+$repo+'\tests\firmware_native" /I"'+$source+'" /I"'+$json+'" "'+$repo+'\tests\firmware_usb_protocol.cpp" "'+$source+'\serial_protocol.cpp" "'+$source+'\companion_session.cpp" "'+$source+'\companion_protocol.cpp" "'+$source+'\model.cpp" "'+$source+'\dashboard_view_model.cpp" /Fe:firmware_usb_protocol.exe'
   & cmd.exe /d /s /c $compile
   if($LASTEXITCODE){throw 'Native firmware compile failed'}
   & .\firmware_usb_protocol.exe

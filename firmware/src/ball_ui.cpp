@@ -3,7 +3,6 @@
 #ifdef CODEXMETER_BOARD_BALL
 #include <lvgl.h>
 #include "ui.h"
-#include "theme_registry.h"
 #include "dashboard_view_model.h"
 #include "compact_tokens.h"
 #include <string.h>
@@ -63,7 +62,7 @@ void refresh() {
   const int values[]={m.running_count,m.waiting_count,m.done_count};
   for(int i=0;i<3;++i) {
     char text[12];
-    bool valid=values[i]>=0 && (i==0 ? activity.valid && millis()-activity.received_ms<15000UL : m.chat_counts_valid);
+    bool valid=values[i]>=0;
     if(!valid) snprintf(text,sizeof(text),"--");
     else if(values[i]>999) snprintf(text,sizeof(text),"999+");
     else snprintf(text,sizeof(text),"%d",values[i]);
@@ -146,8 +145,6 @@ void ui_show_alert(const AlertModel& value) {
   visible(alert_title,false);visible(alert_body,false);visible(alert_panel,true);
   lv_obj_set_style_bg_color(alert_panel,lv_color_hex(0xff0000),0);
 }
-void ui_set_battery(int,bool) {}
-void ui_show_brightness(int) {}
 void ui_tick() {
   uint32_t now=millis();
   if(now-refresh_ms>=1000) {refresh_ms=now;refresh();}
@@ -174,27 +171,7 @@ void ui_touch_gesture(int dx,int dy,int,int,bool tap) {
 void ui_set_waiting(bool value) { waiting=value;show_page(); }
 bool ui_is_waiting() { return waiting; }
 void ui_set_display_active(bool value) { active=value;if(!active) ui_dismiss_alert(); }
-void ui_middle_short_press() {}
-void ui_settings_move(int) {}
-bool ui_settings_visible() { return false; }
-void ui_close_settings() {}
 void ui_dismiss_alert() {alert_visible=false;flash_step=-1;reveal_pending=false;visible(alert_panel,false);}
 bool ui_alert_visible() { return alert_visible; }
-bool ui_set_theme(const char* id,bool) { return id && strcmp(id,"classic_tasks")==0; }
-bool ui_next_theme(int,bool) { return false; }
-const char* ui_theme_id() { return "classic_tasks"; }
-const char* ui_theme_name() { return "Classic Tasks (Ball)"; }
-void ui_set_auto_theme(bool) {}
-bool ui_auto_theme_enabled() { return false; }
-void ui_set_auto_theme_interval(uint16_t) {}
-uint16_t ui_auto_theme_interval() { return 0; }
-void ui_set_volume(int) {}
-int ui_volume() { return 0; }
 int ui_page() { return page; }
-size_t theme_registry_count() { return 0; }
-const ThemePack* theme_registry_at(size_t) { return nullptr; }
-const ThemePack* theme_registry_find(const char*) { return nullptr; }
-const ThemePack* theme_registry_default() { return nullptr; }
-const ThemePack* theme_registry_next(const char*,int) { return nullptr; }
-bool theme_registry_validate() { return true; }
 #endif

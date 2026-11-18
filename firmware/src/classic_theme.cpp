@@ -574,7 +574,7 @@ void classic_update(
   if (state->tasks) {
     const int counts[] = {model.running_count, model.waiting_count, model.done_count};
     for (int i = 0; i < 3; ++i) {
-      if (!model.chat_counts_valid || counts[i] < 0) lv_label_set_text(state->task_values[i], "--");
+      if (counts[i] < 0) lv_label_set_text(state->task_values[i], "--");
       else if (counts[i] > 999) lv_label_set_text(state->task_values[i], "999+");
       else lv_label_set_text_fmt(state->task_values[i], "%d", counts[i]);
     }

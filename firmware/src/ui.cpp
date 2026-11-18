@@ -842,8 +842,8 @@ void ui_tick() {
 
   uint32_t now = millis();
   if (now - dashboard_last_refresh_ms >= 30000UL ||
-      (dashboard_model.chat_counts_valid &&
-       now - app_activity.received_ms >= 15000UL)) {
+      ((dashboard_model.running_count >= 0 || dashboard_model.chat_counts_valid) &&
+       now - app_activity.received_ms >= activity_freshness_ms)) {
     refresh_dashboard_model(now);
   }
   if (!waiting_for_companion) theme_runtime.tick(now);

@@ -67,3 +67,15 @@ and session delivery exclusivity have explicit APIs. Removed the unused alternat
 initial-worker path; recovery tests now drive the production manager loop.
 Validation: 81 initial boundary tests passed; extended affected tests 109 passed plus one outdated
 fixture, corrected; final focused recovery/coordinator checks 36 passed.
+
+## Phase 6 — Firmware capabilities and shared activity semantics
+
+Board capabilities now select real power/settings/sensor services. Ball uses a separate manual
+orientation backend and retains its stored rotation; touch owns its bus initialization. Removed
+Ball dummy power, sensor, theme and settings implementations. Unsupported optional commands report
+UNSUPPORTED. Both dashboards derive partial and stale task counts from the shared view model;
+the square display also expires valid running-only samples at the shared 15-second boundary.
+Validation: native protocol/view-model harness passed; all three PlatformIO targets built successfully
+including the original S3 compile-only target. Static RAM is unchanged from the retained baseline.
+The full Python run during compilation had two 2-second offline subprocess timeouts (378 passed);
+a subsequent isolated hook/launcher run passed all 15. Final suite will run without compiler load.

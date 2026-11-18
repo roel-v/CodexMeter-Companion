@@ -1,4 +1,4 @@
-#include "imu.h"
+#include "orientation.h"
 
 #include <SensorQMI8658.hpp>
 #include <Wire.h>
@@ -64,7 +64,7 @@ static void update_sample(float ax, float ay, float az) {
   filtered_az = filtered_az * (1.0f - IMU_FILTER_ALPHA) + az * IMU_FILTER_ALPHA;
 }
 
-bool imu_init() {
+bool orientation_init() {
   imu_ready = imu.begin(
       Wire, QMI8658_L_SLAVE_ADDRESS, CODEXMETER_I2C_SDA, CODEXMETER_I2C_SCL);
   if (!imu_ready) {
@@ -82,7 +82,7 @@ bool imu_init() {
   return true;
 }
 
-void imu_tick() {
+void orientation_tick() {
   if (!imu_ready || !display_active) return;
 
   uint32_t now = millis();
@@ -116,7 +116,7 @@ void imu_tick() {
   device_logf("INFO", "orientation rotation=%u auto=1", current_rotation);
 }
 
-void imu_set_display_active(bool active) {
+void orientation_set_display_active(bool active) {
   if (display_active == active) return;
 
   display_active = active;
@@ -139,15 +139,15 @@ void imu_set_display_active(bool active) {
   device_logf("INFO", "IMU display_active=1 power=on");
 }
 
-bool imu_available() {
+bool orientation_available() {
   return imu_ready;
 }
 
-bool imu_auto_rotation_enabled() {
+bool orientation_auto_rotation_enabled() {
   return auto_rotation;
 }
 
-void imu_set_auto_rotation(bool enabled) {
+void orientation_set_auto_rotation(bool enabled) {
   auto_rotation = enabled;
   candidate_rotation = current_rotation;
   candidate_since_ms = millis();
@@ -155,7 +155,7 @@ void imu_set_auto_rotation(bool enabled) {
               current_rotation);
 }
 
-bool imu_set_rotation_quadrant(uint8_t quadrant) {
+bool orientation_set_rotation_quadrant(uint8_t quadrant) {
   if (quadrant > 3) return false;
   auto_rotation = false;
   current_rotation = normalize_quadrant(quadrant);
@@ -165,11 +165,11 @@ bool imu_set_rotation_quadrant(uint8_t quadrant) {
   return true;
 }
 
-uint8_t imu_rotation_quadrant() {
+uint8_t orientation_rotation_quadrant() {
   return current_rotation;
 }
 
-bool imu_last_sample(float* ax, float* ay, float* az) {
+bool orientation_last_sample(float* ax, float* ay, float* az) {
   if (!has_sample) return false;
   if (ax) *ax = last_ax;
   if (ay) *ay = last_ay;
@@ -177,7 +177,7 @@ bool imu_last_sample(float* ax, float* ay, float* az) {
   return true;
 }
 
-const char* imu_rotation_label(uint8_t quadrant) {
+const char* orientation_rotation_label(uint8_t quadrant) {
   switch (normalize_quadrant(quadrant)) {
     case 1:
       return "90";
@@ -190,14 +190,14 @@ const char* imu_rotation_label(uint8_t quadrant) {
   }
 }
 
-void imu_print_status(Stream& out) {
+void orientation_print_status(Stream& out) {
   float ax = 0.0f;
   float ay = 0.0f;
   float az = 0.0f;
-  bool sample = imu_last_sample(&ax, &ay, &az);
+  bool sample = orientation_last_sample(&ax, &ay, &az);
   out.printf(
       "IMU ready=%d active=%d auto=%d rotation=%u deg=%s sample=%d ax=%.3f ay=%.3f az=%.3f\n",
       imu_ready ? 1 : 0, display_active ? 1 : 0, auto_rotation ? 1 : 0,
-      current_rotation, imu_rotation_label(current_rotation), sample ? 1 : 0,
+      current_rotation, orientation_rotation_label(current_rotation), sample ? 1 : 0,
       ax, ay, az);
 }

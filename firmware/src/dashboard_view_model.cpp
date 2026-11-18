@@ -109,14 +109,14 @@ DashboardViewModel build_dashboard_view_model(
     model.today_share_permille = static_cast<uint16_t>(share);
   }
 
+  const bool activity_fresh = activity.valid && now_ms - activity.received_ms < activity_freshness_ms;
   model.running_count =
-      activity.valid && activity.running_count >= 0
+      activity_fresh && activity.running_count >= 0
           ? activity.running_count
           : -1;
-  model.chat_counts_valid = activity.valid && activity.chat_counts_valid &&
-      (now_ms - activity.received_ms < 15000UL);
-  model.waiting_count = activity.waiting_count;
-  model.done_count = activity.done_count;
+  model.chat_counts_valid = activity_fresh && activity.chat_counts_valid;
+  model.waiting_count = model.chat_counts_valid ? activity.waiting_count : -1;
+  model.done_count = model.chat_counts_valid ? activity.done_count : -1;
   model.battery_percent =
       battery_percent == BATTERY_USB_POWER ? BATTERY_USB_POWER : battery_percent < 0
           ? -1

@@ -2,7 +2,7 @@
 #include "touch_geometry.h"
 #include "config.h"
 #include "device_log.h"
-#include "imu.h"
+#include "orientation.h"
 #include "ui.h"
 #include <Wire.h>
 
@@ -57,7 +57,7 @@ void touch_input_tick(bool display_active) {
     if (raw_x >= 480 || raw_y >= 480) { cancelled = true; return; }
     // Vendor axes: swap XY and invert physical X (with zero-based bounds).
     int x = 479 - raw_y, y = raw_x;
-    uint8_t rotation = imu_rotation_quadrant();
+    uint8_t rotation = orientation_rotation_quadrant();
     touch_to_logical(x, y, rotation);
     if (!down) {
       down = true; cancelled = false; max_move = 0;
@@ -68,7 +68,7 @@ void touch_input_tick(bool display_active) {
     max_move = max(max_move, max(abs(x - start_x), abs(y - start_y)));
   } else if (down && ((frame && (data[5] & 0x7F) == 0) || now - last_point > 120)) {
     down = false;
-    if (!cancelled && start_rotation == imu_rotation_quadrant() && now - started < 2000) {
+    if (!cancelled && start_rotation == orientation_rotation_quadrant() && now - started < 2000) {
       bool tap = max_move < 18 && now - started < 700;
       ui_touch_gesture(end_x - start_x, end_y - start_y, end_x, end_y, tap);
     }
