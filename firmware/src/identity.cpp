@@ -1,4 +1,5 @@
 #include "identity.h"
+#include "release_version.h"
 
 #include <Arduino.h>
 #include <esp_mac.h>
@@ -13,9 +14,9 @@ static char ble_name[32];
 static char json[513];
 static char boot[17];
 #ifdef CODEXMETER_TEST_BLE_MTU23
-static const char* firmware_version="3.12.3.4-mtu23";
+static const char* firmware_version=CODEXMETER_RELEASE_VERSION "-mtu23";
 #else
-static const char* firmware_version="3.12.3.4";
+static const char* firmware_version=CODEXMETER_RELEASE_VERSION;
 #endif
 
 void identity_init() {

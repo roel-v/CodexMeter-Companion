@@ -12,6 +12,8 @@ $output = Join-Path $BuildRoot ('desktop-' + $Mode)
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 & uv pip install -q --python $MeterPython -e $PSScriptRoot 'Nuitka==4.3.1' ordered-set zstandard
 if ($LASTEXITCODE) { throw 'Nuitka dependency installation failed.' }
+$releaseVersion = & $MeterPython "$PSScriptRoot\scripts\release_version.py"
+if ($LASTEXITCODE) { throw 'Invalid release metadata.' }
 Push-Location $PSScriptRoot
 try {
     & $MeterPython -m nuitka "--mode=$Mode" --msvc=latest --jobs=8 --lto=no `
@@ -19,8 +21,8 @@ try {
         --include-package=bleak.backends.winrt --windows-console-mode=attach `
         --include-module=pystray._win32 --include-module=PIL.IcoImagePlugin `
         --assume-yes-for-downloads --output-filename=CodexMeter.exe "--output-dir=$output" `
-        --company-name=CodexMeter --product-name=CodexMeter --file-version=3.12.3.4 `
-        --product-version=3.12.3.4 --file-description='CodexMeter Windows companion' `
+        --company-name=CodexMeter --product-name=CodexMeter "--file-version=$releaseVersion" `
+        "--product-version=$releaseVersion" --file-description='CodexMeter Windows companion' `
         "--report=$output\compilation-report.xml" windows_entry.py
     if ($LASTEXITCODE) { throw 'Standalone build failed.' }
 } finally { Pop-Location }

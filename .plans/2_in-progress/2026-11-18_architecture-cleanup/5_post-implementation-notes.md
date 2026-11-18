@@ -95,3 +95,12 @@ TTL preserve behavior; firmware's larger deduplication ledger and 5-second margi
 Compatibility diagnostics derive supported stream versions from the validator. Screen timeout uses
 its existing settings owner. Validation: 78 affected tests, then 30 protocol/delivery tests (including
 cross-language bound agreement) passed; native firmware harness passed after the final changes.
+
+### Release metadata
+
+codexmeter/__init__.py remains the release-version authority (no numbering change). An import-free AST
+reader validates four numeric Windows version components. Nuitka consumes that value and PlatformIO
+generates a header in its D: build directory; the isolated MTU test suffix remains explicit.
+Validation: full Python suite passed, 387 tests, without compiler contention. Header generation is
+stable when unchanged and rejects malformed/duplicate/oversized versions before output. Final target
+and onefile builds are running as phase-8 verification.
