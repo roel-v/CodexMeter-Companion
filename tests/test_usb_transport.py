@@ -11,6 +11,11 @@ from codexmeter.payloads import Payload
 from tests.support.usb_transport import B, ID, H, STATE, IDENTITY, discovered, FakeChannel
 
 
+class UnknownLockState:
+    async def is_locked(self):
+        return None
+
+
 def test_session_correlates_retry_and_explicit_rejection():
     async def run():
         c = FakeChannel("x")
@@ -217,6 +222,7 @@ def test_usb_worker_with_every_bluetooth_import_unavailable(monkeypatch):
         m = DeviceManager(
             [DeviceConfig(ID)],
             usb_discovery=d,
+            policy_detector=UnknownLockState(),
             host_id=H,
             connect_timeout_sec=0.1,
             disconnect_timeout_sec=0.1,
@@ -414,6 +420,7 @@ def test_initial_auto_retries_usb_after_first_identity_timeout(monkeypatch):
         m = DeviceManager(
             [DeviceConfig(ID)],
             usb_discovery=d,
+            policy_detector=UnknownLockState(),
             host_id=H,
             connect_timeout_sec=0.1,
             disconnect_timeout_sec=0.1,
@@ -462,6 +469,8 @@ def test_four_device_workers_one_unanswered_ack_does_not_block_peers(monkeypatch
 
         ids = {str(i): f"codexmeter-{i:012x}" for i in range(1, 5)}
 
+        unanswered = asyncio.Event()
+
         class Channel(FakeChannel):
             async def write(self, frame):
                 if frame == b"identity\n":
@@ -472,6 +481,8 @@ def test_four_device_workers_one_unanswered_ack_does_not_block_peers(monkeypatch
                     )
                 else:
                     await super().write(frame)
+                    if self.port == "4" and frame.startswith(b"CM1 DATA "):
+                        unanswered.set()
 
         channels = []
 
@@ -489,6 +500,7 @@ def test_four_device_workers_one_unanswered_ack_does_not_block_peers(monkeypatch
         m = DeviceManager(
             [DeviceConfig(i, connection_mode="usb_only") for i in ids.values()],
             usb_discovery=d,
+            policy_detector=UnknownLockState(),
             host_id=H,
             connect_timeout_sec=0.1,
             disconnect_timeout_sec=0.1,
@@ -523,6 +535,7 @@ def test_four_device_workers_one_unanswered_ack_does_not_block_peers(monkeypatch
                 break
             await asyncio.sleep(0.01)
         assert all(s.state.last_ack_at for s in m.slots[:3])
+        await asyncio.wait_for(unanswered.wait(), timeout=1)
         assert m.slots[3].state.last_ack_at is None
         started = time.monotonic()
         stop.set()
