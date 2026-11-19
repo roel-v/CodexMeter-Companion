@@ -382,6 +382,9 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             payload = Payload(payload.kind, {k: v for k, v in payload.data.items() if k != "run"})
         await manager.broadcast(payload)
 
+    from .sleep_guard import CodexSleepGuard, observe_with_guard
+    guard = CodexSleepGuard() if chats and args.prevent_sleep else None
+
     def status_provider() -> dict[str, object]:
         snapshot = manager.status()
         for device in snapshot.get("devices", []):
@@ -393,7 +396,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         if recovery is not None:
             status["bluetooth_recovery"] = recovery.status()
         if chats is not None:
-            status["chat_activity"] = dict(chats.status)
+            status["chat_activity"] = dict(chats.status, preventing_sleep=bool(guard and guard.handle))
         if desktop is not None:
             status["tray"] = desktop.snapshot
         return status
@@ -445,7 +448,8 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         stop_event,
         {
             **({"diagnostics": diagnostics.heartbeat(stop_event, desktop)} if diagnostics else {}),
-            **({"chat_activity": chats.run(manager.broadcast, stop_event)} if chats else {}),
+            **({"chat_activity": (observe_with_guard(chats, manager.broadcast, stop_event, guard)
+                                if guard else chats.run(manager.broadcast, stop_event))} if chats else {}),
             **({"tray_status": tray_status_loop()} if desktop is not None else {}),
             **({"compatibility": compatibility_loop(),
                 "power_events": power_event_loop(monitor, stop_event)} if not validation_mode else {}),
@@ -493,6 +497,8 @@ def build_file_handler(
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the CodexMeter host daemon.")
     parser.add_argument("--validation-mode", action="store_true", help="Isolated fixture profile only; disables live telemetry producers")
+    parser.add_argument("--prevent-sleep", action=argparse.BooleanOptionalAction, default=True,
+                        help="Keep Windows awake during active local Codex turns")
     parser.add_argument("--codex-bin", default="codex")
     parser.add_argument("--timeout", type=float, default=15.0)
     parser.add_argument("--poll-interval", type=int, default=POLL_INTERVAL_SEC)

@@ -8,6 +8,14 @@ The original firmware target is for the **S3**, not the C6.
 For the round Spotpear Ball V2, three-page navigation, per-display controls and
 firmware compatibility, see the [Ball and mixed-display guide](docs/spotpear-ball.md).
 
+## Automatic Windows sleep
+
+While the companion runs, it asks Windows to keep the PC awake during active local Codex turns.
+Chats waiting for approval or input allow the normal sleep timer to run once all other turns are idle.
+If activity readings stop, the companion releases its request within five minutes of the last confirmed running turn.
+The display can turn off independently. To disable this feature, start the companion with
+`CodexMeter.exe --daemon --no-prevent-sleep`.
+
 ## Release notifications
 
 While running, the companion checks this fork's latest stable GitHub release
