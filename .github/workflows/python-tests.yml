@@ -28,4 +28,7 @@ jobs:
           python -m pip install -e ".[test]"
 
       - name: Run tests
+        env:
+          # The Windows hardware fixtures require disposable registry copies on D:.
+          PYTEST_ADDOPTS: ${{ runner.os == 'Windows' && '--basetemp=D:/codexmeter-pytest' || '' }}
         run: python -m pytest -q
