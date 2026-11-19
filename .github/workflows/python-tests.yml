@@ -31,4 +31,4 @@ jobs:
         env:
           # The Windows hardware fixtures require disposable registry copies on D:.
           PYTEST_ADDOPTS: ${{ runner.os == 'Windows' && '--basetemp=D:/codexmeter-pytest' || '' }}
-        run: python -m pytest -q
+        run: python -m pytest -q -W error::pytest.PytestUnraisableExceptionWarning

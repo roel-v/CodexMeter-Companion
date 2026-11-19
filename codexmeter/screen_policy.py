@@ -8,6 +8,7 @@ import re
 import sys
 import time
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from dataclasses import dataclass
 
 from .payloads import Payload, build_screen_control_payload
@@ -97,7 +98,16 @@ class MacLockDetector:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2.0)
+            output = asyncio.create_task(proc.communicate())
+            try:
+                stdout, _ = await asyncio.wait_for(asyncio.shield(output), timeout=2.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                # Finish draining the pipe and reap the child before its event loop closes.
+                if proc.returncode is None:
+                    with suppress(ProcessLookupError):
+                        proc.kill()
+                await output
+                raise
         except (OSError, asyncio.TimeoutError):
             log.debug("Failed to query macOS lock state", exc_info=True)
             return None

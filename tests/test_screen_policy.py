@@ -1,3 +1,10 @@
+import asyncio
+import sys
+from types import SimpleNamespace
+
+import pytest
+
+from codexmeter import screen_policy
 from codexmeter.screen_policy import LockScreenPolicy, parse_ioreg_lock_state
 
 
@@ -52,8 +59,39 @@ def test_parse_ioreg_lock_state():
     assert parse_ioreg_lock_state("no lock key") is None
 
 
+@pytest.mark.parametrize("cancel", [False, True], ids=["timeout", "cancel"])
+def test_interrupted_mac_lock_query_reaps_its_process(monkeypatch, cancel):
+    async def exercise():
+        started = asyncio.get_running_loop().create_future()
+        spawn = asyncio.create_subprocess_exec
+
+        async def spawn_slow_query(*args, **kwargs):
+            child = await spawn(sys.executable, "-c", "import time; time.sleep(30)", **kwargs)
+            started.set_result(child)
+            return child
+
+        monkeypatch.setattr(screen_policy, "sys", SimpleNamespace(platform="darwin"))
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn_slow_query)
+        query = asyncio.create_task(screen_policy.MacLockDetector().is_locked())
+        child = await asyncio.wait_for(started, 5)
+        try:
+            if cancel:
+                query.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await query
+            else:
+                assert await asyncio.wait_for(query, 5) is None
+            assert child.returncode is not None
+            assert child.stdout.at_eof()
+        finally:
+            if child.returncode is None:
+                child.kill()
+            await child.communicate()
+
+    asyncio.run(exercise())
+
+
 def test_policy_loop_uses_shared_policy_and_manager_callback():
-    import asyncio
     from codexmeter.screen_policy import screen_policy_loop
     async def exercise():
         stop = asyncio.Event()
