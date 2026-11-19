@@ -239,7 +239,9 @@ the exact rebuilt package passed self-test, installation/hash, live connection/s
 No physical PC sleep/reboot, overnight soak or separate no-Bluetooth-PC test was performed. Native power registration
 and simulated lifecycle/backend failures are covered; they do not substitute for those physical tests. Original S3
 was compiled, not flashed locally. More than two simultaneous displays was not tested. The user's separate-machine
-USB acceptance and the future MCP/keep-awake features remain separate, unfinished work. No automatic restart machinery,
+USB acceptance and MCP were separate work at closeout.
+[Keep-awake subsequently shipped in 3.12.3.6](../2026-11-18_keep-awake-while-jobs-run/5_post-implementation-notes.md).
+No automatic restart machinery,
 push or GitHub release was added/performed.
 
 Fix forward remains appropriate for a bounded new defect. Replan if the strategy proves inadequate; restart if its

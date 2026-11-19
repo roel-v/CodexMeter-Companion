@@ -52,4 +52,5 @@ companion shutdown/restart, concurrent MCP clients, privacy filtering and standa
 ## Relationship to existing work
 
 Build on shared telemetry and generic per-display status from the USB/Bluetooth feature without coupling MCP clients
-to a transport. Keep-awake and MCP can share the existing job snapshot; neither new feature requires the other.
+to a transport. MCP can reuse the chat activity snapshot already used
+by [keep-awake](../../3_done/2026-11-18_keep-awake-while-jobs-run/5_post-implementation-notes.md).
