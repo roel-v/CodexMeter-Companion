@@ -1,5 +1,6 @@
 import asyncio
 import json
+from unittest.mock import patch
 
 from codexmeter.events import EventServer
 
@@ -510,12 +511,13 @@ def test_transcript_append_renews_activity_lease(tmp_path):
         with transcript.open("a", encoding="utf-8") as handle:
             handle.write('{"type":"event_msg","payload":{"type":"token_count"}}\n')
 
-        await server.transcripts.scan_once()
-        renewed_at = task.last_seen_at
+        with patch("codexmeter.events.time") as clock:
+            clock.monotonic.return_value = 1000.0
+            await server.transcripts.scan_once()
 
-        assert renewed_at > 0
-        assert await server._expire_stale_tasks(now=renewed_at + 59) == 0
-        assert await server._expire_stale_tasks(now=renewed_at + 60) == 1
+        assert task.last_seen_at == 1000.0
+        assert await server._expire_stale_tasks(now=1059.999) == 0
+        assert await server._expire_stale_tasks(now=1060.0) == 1
 
     asyncio.run(scenario())
 
