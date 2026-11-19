@@ -26,8 +26,7 @@ installer or separate Python installation is needed.
 You need Windows 10/11, Codex installed and signed in, a
 supported display, and a USB data cable to flash its firmware.
 
-1. Download **CodexMeter.exe** and the firmware for your display from the
-   [latest release](https://github.com/roel-v/CodexMeter-Companion/releases/latest).
+1. Download **CodexMeter.exe** from the [latest release](https://github.com/roel-v/CodexMeter-Companion/releases/latest). For a new display, download its [firmware and flashing instructions](https://github.com/roel-v/CodexMeter-Companion/releases/tag/windows-c6-2026.11.19).
 2. Follow the [Waveshare C6 setup](README.windows.md) or
    [Spotpear Ball setup](docs/spotpear-ball.md#build-and-flash) to flash the board.
 3. Run the companion, register your display in the control panel and start the

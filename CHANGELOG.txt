@@ -3,6 +3,12 @@ CodexMeter Companion changelog
 Entries are grouped by release date, newest first. Application versions are
 recorded separately; firmware changes are noted where applicable.
 
+2026-11-19 — windows-c6-2026.11.19.1 (Windows 3.12.3.6)
+- Keep Windows awake during active local Codex turns. Release the system power request when all
+  turns are idle or waiting for input, the observer stops, or running counts go stale for five minutes.
+- Expose preventing_sleep in chat activity status. Disable with --daemon --no-prevent-sleep.
+- Desktop update. Both displays continue to use firmware 3.12.3.5.
+
 2026-11-19 — windows-c6-2026.11.19 (Windows and firmware 3.12.3.5)
 - Use USB data on either supported display, including on PCs without Bluetooth. Auto mode prefers USB and falls back to Bluetooth LE when available.
 - Coordinate pricing acceptance with concurrent checks; preserve newer pending changes and rate history.
