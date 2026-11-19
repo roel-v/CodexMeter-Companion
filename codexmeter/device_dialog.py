@@ -10,10 +10,12 @@ def device_row(device):
     state = {"maintenance":"Maintenance", "owned_elsewhere":"In use elsewhere", "probing":"Probing", "switching":"Switching"}.get(device.get("connection_state"), state)
     if device.get("compatibility") == "incompatible":
         state = "Incompatible protocol"
+    if not device.get("enabled", True):
+        state = "Auto-connect off"
     return (device.get("label") or device["device_id"], device.get("model") or "Legacy / unknown",
             device.get("firmware") or "Unknown", state,
             device.get("last_error") or device.get("metric_validity_note") or (f"ACK {device['last_ack_age_sec']}s ago" if device.get("last_ack_age_sec") is not None else "No acknowledgement yet"), device.get("transport") or "—",
-            device.get("connection_mode", "auto"), device.get("fallback_reason") or "—")
+            device.get("connection_mode", "auto"), (device.get("fallback_reason") or "—") if device.get("enabled", True) else "—")
 
 
 def show_devices(parent, *, sender=None):
@@ -59,6 +61,8 @@ def show_devices(parent, *, sender=None):
         key=selected_id();device=devices.get(key,{});record=commands.get(key)
         connected=bool(device.get('connected') and device.get('enabled',True) and not device.get('maintenance')
                        and device.get('compatibility')!='incompatible')
+        auto_button.configure(text='Disable auto-connect' if device.get('enabled', True) else 'Enable auto-connect',
+                              state='normal' if device else 'disabled')
         caps=device.get('capabilities')
         for name,button in buttons.items():
             cap='screen' if name in ('on','off') else name
@@ -113,6 +117,12 @@ def show_devices(parent, *, sender=None):
         ('maintenance_pause','Pause for maintenance',lambda:operation('maintenance_acquire')),
         ('maintenance_resume','Resume',lambda:operation('maintenance_resume'))):
         ttk.Button(connection,name=name,text=text,command=callback).pack(side='left',padx=5)
+    def toggle_auto_connect():
+        device = devices.get(selected_id())
+        if device:
+            operation('device_registry_update', action='enabled', enabled=not device.get('enabled', True))
+    auto_button = ttk.Button(connection, name='auto_connect', command=toggle_auto_connect)
+    auto_button.pack(side='left', padx=5)
     def selected(_event=None):
         device=devices.get(selected_id(),{})
         mode.set(device.get('connection_mode','auto'))

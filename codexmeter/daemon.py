@@ -382,8 +382,14 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             payload = Payload(payload.kind, {k: v for k, v in payload.data.items() if k != "run"})
         await manager.broadcast(payload)
 
-    from .sleep_guard import CodexSleepGuard, observe_with_guard
-    guard = CodexSleepGuard() if chats and args.prevent_sleep else None
+    from .sleep_guard import CodexSleepGuard, SleepPreference, observe_with_guard
+    sleep_preference = SleepPreference(APP_DIR)
+    guard = CodexSleepGuard(sleep_preference.enabled()) if chats and args.prevent_sleep else None
+
+    def sleep_status():
+        return {"preventing_sleep": bool(guard and guard.handle),
+                "prevent_sleep_enabled": bool(guard and guard.enabled),
+                "prevent_sleep_overridden": not args.prevent_sleep}
 
     def status_provider() -> dict[str, object]:
         snapshot = manager.status()
@@ -396,7 +402,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         if recovery is not None:
             status["bluetooth_recovery"] = recovery.status()
         if chats is not None:
-            status["chat_activity"] = dict(chats.status, preventing_sleep=bool(guard and guard.handle))
+            status["chat_activity"] = dict(chats.status, **sleep_status())
         if desktop is not None:
             status["tray"] = desktop.snapshot
         return status
@@ -414,10 +420,13 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
                     next_versions = time.monotonic() + 60
                 if chats is not None:
                     chats.desktop_running = monitor.versions.get("desktop_running")
+                if guard is not None:
+                    guard.set_enabled(sleep_preference.enabled())
                 monitor.tick()
                 snapshot = monitor.snapshot()
                 if desktop is not None:
                     desktop.commands.put(("compatibility_status", snapshot))
+                    desktop.commands.put(("sleep_status", sleep_status()))
                     notice = monitor.notifications()
                     if notice:
                         desktop.commands.put(("compatibility_warning", notice))

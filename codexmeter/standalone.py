@@ -29,6 +29,20 @@ def self_test(output: Path) -> int:
         root.update()
         from .panel_diagnostics import check_panel
         result["external_panel"] = check_panel(root, app)
+        from .sleep_guard import SleepPreference
+        import tempfile
+        live_preference = app.sleep_preference
+        try:
+            with tempfile.TemporaryDirectory(prefix="codexmeter-power-check-") as scratch:
+                app.sleep_preference = SleepPreference(Path(scratch))
+                app.show_sleep_status({})
+                app.sleep_checkbox.invoke()
+                assert not SleepPreference(Path(scratch)).enabled()
+                app.sleep_checkbox.invoke()
+                assert SleepPreference(Path(scratch)).enabled()
+                result["keep_awake_checkbox"] = True
+        finally:
+            app.sleep_preference = live_preference
         from .pricing import PricingStore
         assert PricingStore().revisions()[-1]["prices"], "Bundled pricing seed missing"
         app.open_pricing()
@@ -44,7 +58,7 @@ def self_test(output: Path) -> int:
                               if isinstance(w, tk.Toplevel) and w.title().endswith("Displays"))
         widget_names = {str(w).split('.')[-1] for frame in display_dialog.winfo_children()
                         for w in frame.winfo_children()}
-        assert {'connection_mode', 'apply_mode', 'maintenance_pause', 'maintenance_resume'} <= widget_names
+        assert {'connection_mode', 'apply_mode', 'auto_connect', 'maintenance_pause', 'maintenance_resume'} <= widget_names
         result['connection_maintenance_controls'] = True
         display_dialog.withdraw()
         root.update()
@@ -58,7 +72,6 @@ def self_test(output: Path) -> int:
             'transport':'usb', 'connection_mode':'usb_only', 'connection_state':'usb_active'})
         assert fixture[5:7] == ('usb', 'usb_only')
         result['transport_status_projection'] = True
-        import tempfile
         from .update_dialog import show_updates
         from .updates import UpdateStore
         with tempfile.TemporaryDirectory(prefix="codexmeter-preference-check-") as scratch:

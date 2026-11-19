@@ -15,7 +15,7 @@ def test_external_panel_health_poll_and_recovery(monkeypatch):
     import codexmeter.pricing as pricing
     monkeypatch.setattr(ui.threading, 'Thread', ImmediateThread)
     monkeypatch.setattr(pricing, 'PricingStore', lambda: SimpleNamespace(status=lambda: {'state':'current'}))
-    app = SimpleNamespace(tray_managed=False, compatibility_polling=False,
+    app = SimpleNamespace(show_sleep_status=lambda activity: None, tray_managed=False, compatibility_polling=False,
         compatibility_results=queue.Queue(), compatibility_snapshot={},
         compatibility_text=Value(), pricing_status=Value(), results=queue.Queue(),
         pricing_review_button=SimpleNamespace(pack_forget=lambda:None),

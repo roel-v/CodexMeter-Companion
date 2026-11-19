@@ -13,8 +13,9 @@ firmware compatibility, see the [Ball and mixed-display guide](docs/spotpear-bal
 While the companion runs, it asks Windows to keep the PC awake during active local Codex turns.
 Chats waiting for approval or input allow the normal sleep timer to run once all other turns are idle.
 If activity readings stop, the companion releases its request within five minutes of the last confirmed running turn.
-The display can turn off independently. To disable this feature, start the companion with
-`CodexMeter.exe --daemon --no-prevent-sleep`.
+The display can turn off independently. Use **Keep this PC awake while Codex turns are running** in the control
+panel to change the setting. It takes effect while the bridge is running and is saved for the next login.
+Starting the companion with `--daemon --no-prevent-sleep` disables it for that launch.
 
 ## Release notifications
 
@@ -159,6 +160,9 @@ Hardware test evidence is in `dist/c6/hardware-test-20261017/`.
 5. Click **Test alert**, then **Read usage** / **Status** to check both paths.
 
 The bridge uses the USB serial port for wired operation and Bluetooth LE for wireless operation. Auto mode prefers a stable USB connection. It can reconnect to registered devices and handle multiple displays.
+
+To stop reconnecting to a display on this PC, select it in **Displays** and click **Disable auto-connect**.
+Its registration is saved. Choose **Enable auto-connect** when you bring it back.
 
 ## Task alerts and optional startup
 

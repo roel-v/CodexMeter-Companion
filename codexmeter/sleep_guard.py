@@ -6,9 +6,28 @@ import ctypes
 from ctypes import wintypes
 import logging
 
+from .settings import APP_DIR
+
 
 SYSTEM_REQUIRED = 1
 STALE_ACTIVITY_SECONDS = 300
+
+
+class SleepPreference:
+    """The presence of the per-user opt-out file disables automatic sleep prevention."""
+
+    def __init__(self, directory=APP_DIR):
+        self.opt_out = directory / "prevent-sleep.disabled"
+
+    def enabled(self):
+        return not self.opt_out.exists()
+
+    def save(self, enabled):
+        if enabled:
+            self.opt_out.unlink(missing_ok=True)
+        else:
+            self.opt_out.parent.mkdir(parents=True, exist_ok=True)
+            self.opt_out.touch()
 
 
 class DetailedReason(ctypes.Structure):
@@ -25,7 +44,9 @@ class ReasonContext(ctypes.Structure):
 
 
 class CodexSleepGuard:
-    def __init__(self):
+    def __init__(self, enabled=True):
+        self.enabled = enabled
+        self.running = False
         self.handle = None
         kernel = ctypes.WinDLL("kernel32", use_last_error=True)
         self.create = kernel.PowerCreateRequest
@@ -45,7 +66,16 @@ class CodexSleepGuard:
         # Preserve protection across reconnects while the desktop is present.
         if running is None and desktop_running is not False:
             return
-        required = bool(running)
+        self.running = bool(running)
+        self._apply()
+
+    def set_enabled(self, enabled):
+        if self.enabled != enabled:
+            self.enabled = enabled
+            self._apply()
+
+    def _apply(self):
+        required = self.enabled and self.running
         if required == (self.handle is not None):
             return
         if required:
@@ -80,7 +110,7 @@ async def observe_with_guard(chats, broadcast, stop_event, guard, *, stale_after
                 expiry.cancel()
                 expiry = None
             guard.update(running, chats.desktop_running)
-            if running and guard.handle is not None:
+            if running:
                 expiry = loop.call_later(stale_after, guard.update, 0)
         await broadcast(payload)
 

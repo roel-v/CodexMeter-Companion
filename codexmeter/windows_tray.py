@@ -60,6 +60,7 @@ class WindowsTray:
         self.notification_dialog = None
         self.compatibility_dialog = None
         self.compatibility_status = {}
+        self.sleep_status = {}
 
     def bind_shutdown(self, callback: Callable[[], None]):
         self.shutdown = callback
@@ -142,6 +143,7 @@ class WindowsTray:
             self.app = MeterApp(self.root, tray_managed=True)
             self.app.compatibility_snapshot = self.compatibility_status
             self.app.compatibility_action = self._show_compatibility
+            self.app.show_sleep_status(self.sleep_status)
         self.root.deiconify()
         self.root.lift()
         self.root.focus_force()
@@ -169,6 +171,10 @@ class WindowsTray:
                 self.compatibility_status = value
                 if self.app is not None:
                     self.app.compatibility_snapshot = value
+            elif command == "sleep_status":
+                self.sleep_status = value
+                if self.app is not None:
+                    self.app.show_sleep_status(value)
             elif command == "compatibility_warning":
                 from .compatibility import COMPONENTS
                 affected = ", ".join(COMPONENTS[k][0] for k in value["components"] if k in COMPONENTS)

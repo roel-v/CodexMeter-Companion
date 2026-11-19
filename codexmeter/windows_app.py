@@ -15,6 +15,7 @@ from tkinter import ttk, messagebox
 from .app_server import resolve_codex_binary
 from .launch import app_command
 from .settings import LOG_FILE
+from .sleep_guard import SleepPreference
 
 
 class MeterApp:
@@ -72,6 +73,15 @@ class MeterApp:
         from .update_dialog import show_updates
         ttk.Button(controls, text="Updates", command=lambda: show_updates(self.root)).pack(side="left", padx=5)
         from .compatibility_dialog import show_compatibility
+        power = ttk.Frame(frame)
+        power.pack(fill="x", pady=(0, 6))
+        self.sleep_preference = SleepPreference()
+        self.keep_awake = tk.BooleanVar(value=self.sleep_preference.enabled())
+        self.sleep_checkbox = ttk.Checkbutton(power, name="keep_awake", variable=self.keep_awake,
+            text="Keep this PC awake while Codex turns are running", command=self.save_sleep_preference)
+        self.sleep_checkbox.pack(side="left")
+        self.sleep_text = tk.StringVar()
+        ttk.Label(power, textvariable=self.sleep_text).pack(side="left", padx=8)
         self.compatibility_text = tk.StringVar(value="Checking Codex data compatibility…")
         ttk.Label(frame, textvariable=self.compatibility_text, wraplength=720).pack(anchor="w")
         ttk.Button(frame, text="Codex data status / details…", command=lambda:
@@ -155,6 +165,25 @@ class MeterApp:
     def adopt(self) -> None:
         self.command("devices", "adopt", self.short_id.get().strip(), "--alias", self.alias.get().strip(), "--connection-mode", self.connection_mode.get())
 
+    def save_sleep_preference(self):
+        try:
+            self.sleep_preference.save(self.keep_awake.get())
+        except OSError as exc:
+            self.keep_awake.set(not self.keep_awake.get())
+            messagebox.showerror("Keep this PC awake", str(exc), parent=self.root)
+
+    def show_sleep_status(self, activity):
+        overridden = activity.get("prevent_sleep_overridden") is True
+        self.sleep_checkbox.configure(state="disabled" if overridden else "normal")
+        self.keep_awake.set(False if overridden else self.sleep_preference.enabled())
+        if overridden:
+            text = "Disabled by --no-prevent-sleep"
+        elif activity.get("preventing_sleep"):
+            text = "Keeping this PC awake now"
+        else:
+            text = ""
+        self.sleep_text.set(text)
+
     def open_log(self) -> None:
         if LOG_FILE.exists():
             os.startfile(LOG_FILE)
@@ -177,12 +206,14 @@ class MeterApp:
                         for row in rows.values()
                     ):
                         snapshot = {}
-                    self.compatibility_results.put(snapshot)
+                    activity = reply.get('chat_activity', {}) if isinstance(reply, dict) else {}
+                    self.compatibility_results.put((snapshot, activity))
                 except Exception:
-                    self.compatibility_results.put({})
+                    self.compatibility_results.put(({}, {}))
             threading.Thread(target=read_health, daemon=True).start()
         try:
-            self.compatibility_snapshot = self.compatibility_results.get_nowait()
+            self.compatibility_snapshot, activity = self.compatibility_results.get_nowait()
+            self.show_sleep_status(activity)
             self.compatibility_polling = False
         except queue.Empty:
             pass
