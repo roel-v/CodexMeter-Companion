@@ -3,6 +3,15 @@ CodexMeter Companion changelog
 Entries are grouped by release date, newest first. Application versions are
 recorded separately; firmware changes are noted where applicable.
 
+2026-11-19 — windows-c6-2026.11.19.2 (Windows 3.12.3.7)
+- Add a control-panel checkbox for keeping the PC awake during running Codex turns. The setting
+  takes effect on the running bridge, survives login, and shows when a power request is active.
+- Add per-display auto-connect controls. A display can be moved to another PC and enabled again
+  later without repeating registration.
+- Reap interrupted macOS lock queries and test timeout and cancellation. Run both platform CI
+  jobs independently, install image test dependencies, and stabilize expiry and USB worker tests.
+- Both displays continue to use firmware 3.12.3.5.
+
 2026-11-19 — windows-c6-2026.11.19.1 (Windows 3.12.3.6)
 - Keep Windows awake during active local Codex turns. Release the system power request when all
   turns are idle or waiting for input, the observer stops, or running counts go stale for five minutes.

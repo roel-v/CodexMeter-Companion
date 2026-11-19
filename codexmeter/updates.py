@@ -22,7 +22,7 @@ REPOSITORY_ID = 1432451927
 RELEASES_URL = f"https://github.com/{REPOSITORY}/releases"
 API_URL = f"https://api.github.com/repositories/{REPOSITORY_ID}/releases/latest"
 # Keep the historical tag format so installed clients can recognize new releases.
-CURRENT_RELEASE = "windows-c6-2026.11.19.1"
+CURRENT_RELEASE = "windows-c6-2026.11.19.2"
 APP_VERSION = __version__
 _LOCK = threading.RLock()
 
