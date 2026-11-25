@@ -66,12 +66,13 @@ One more swipe returns to the dashboard. Swipe right to go back, or tap
 **Today** or **7 days** on the token-details page to choose the period.
 
 <table>
-  <tr><th>Dashboard</th><th>Token details</th></tr>
+  <tr><th>Dashboard</th><th>Token details</th><th>Weekly quota</th></tr>
   <tr>
-    <td><img src="docs/assets/windows-c6/classic-tasks.png" width="360" alt="C6 dashboard with token totals, weekly quota, reset countdown and chat counts"></td>
-    <td><img src="docs/assets/windows-c6/token-details.png" width="360" alt="C6 token details showing input, cached input, output and estimated API costs"></td>
+    <td><img src="docs/assets/windows-c6/classic-tasks.png" width="280" alt="C6 dashboard with token totals, weekly quota, reset countdown and chat counts"></td>
+    <td><img src="docs/assets/windows-c6/token-details.png" width="280" alt="C6 token details showing input, cached input, output and estimated API costs"></td>
+    <td><img src="docs/assets/windows-c6/weekly-quota.png" width="280" alt="C6 weekly quota showing 58% remaining, a reset in 2 days and 4 hours, 2 running chats, 0 waiting and 7 done"></td>
   </tr>
-  <tr><td colspan="2"><sub>Captured from the C6 display. Values are examples from the capture.</sub></td></tr>
+  <tr><td colspan="3"><sub>Captured from the C6 display. Values are examples from the capture.</sub></td></tr>
 </table>
 
 The C6 supports automatic rotation and shows USB or battery status. It also
