@@ -3,6 +3,11 @@ CodexMeter Companion changelog
 Entries are grouped by release date, newest first. Application versions are
 recorded separately; firmware changes are noted where applicable.
 
+2026-11-25 — windows-c6-2026.11.25 (Windows and firmware 3.12.3.8)
+- Automatically install and refresh the Windows Desktop wrapper for running and waiting chat counts. The control panel remembers an explicit opt-out. The wrapper locates the bundled CLI on launch and reports incompatible live-status responses in the control panel.
+- Keep the last known weekly quota and reset time after sleep or while Codex is unavailable. Both displays mark the reading as stale until fresh quota arrives.
+- Add a third swipe page to Classic Tasks on the Waveshare C6. It shows a larger weekly percentage, reset countdown and chat counts. Remove the footer hints to give the readings more room.
+
 2026-11-19 — windows-c6-2026.11.19.2 (Windows 3.12.3.7)
 - Add a control-panel checkbox for keeping the PC awake during running Codex turns. The setting
   takes effect on the running bridge, survives login, and shows when a power request is active.
