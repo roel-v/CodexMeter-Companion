@@ -1,7 +1,7 @@
 # Token details and API-equivalent costs
 
-In **Classic Tasks**, swipe horizontally to move between the dashboard and token
-details. On the details page, tap **Today** or **7 days**. The selection stays in
+In **Classic Tasks**, swipe left through the dashboard, token details and weekly
+quota, or swipe right to go back. On the details page, tap **Today** or **7 days**. The selection stays in
 place until changed; pages do not cycle automatically. Physical buttons retain
 their existing brightness, theme and settings functions. Touch is ignored while
 the screen is off, waiting for the companion, showing an alert, or in settings.

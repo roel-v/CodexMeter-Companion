@@ -14,9 +14,11 @@ enum class DashboardDataState : uint8_t {
   Error,
 };
 
+enum class ClassicPage : uint8_t { Dashboard, TokenDetails, WeeklyQuota, Count };
+
 struct DashboardViewModel {
   TokenBreakdown breakdown[2]{};
-  bool detail_page = false;
+  ClassicPage page = ClassicPage::Dashboard;
   bool detail_week = false;
   DashboardDataState data_state = DashboardDataState::Waiting;
   bool usage_valid = false;

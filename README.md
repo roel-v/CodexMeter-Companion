@@ -59,9 +59,11 @@ afterward. Pages stay where you leave them until you swipe again.
 
 ### Waveshare C6
 
-The C6 has a dashboard and a token-details page. Swipe horizontally between them;
-on the details page, tap **Today** or **7 days** to choose the period.
-Select **Classic Tasks** in the display's theme settings for this layout.
+In **Classic Tasks**, swipe left from the dashboard for token details, then left
+again for the weekly quota. The quota page shows the percentage remaining in
+large type, the reset countdown and the Running, Waiting and Done counts.
+One more swipe returns to the dashboard. Swipe right to go back, or tap
+**Today** or **7 days** on the token-details page to choose the period.
 
 <table>
   <tr><th>Dashboard</th><th>Token details</th></tr>
@@ -103,8 +105,6 @@ control panel leaves the companion running; choose **Quit CodexMeter** from
 the tray menu to stop it. Codex's executable is found automatically, including
 after Codex updates.
 
-For multiple displays, open **Displays** to check each connection and control
-supported settings separately. They share the same usage and chat data while
 On Windows, the companion installs the Desktop wrapper automatically for live
 **Running** and **Waiting** counts. If Codex Desktop is already open on first
 run, quit it after your chats finish and reopen it from Start. Clear **Use Desktop
@@ -112,6 +112,8 @@ wrapper for live chat counts** to opt out. The wrapper
 finds the bundled CLI again on each launch. **Codex data status / details**
 shows whether the companion can read the current version.
 
+For multiple displays, open **Displays** to check each connection and control
+supported settings separately. They share the same usage and chat data while
 keeping their own page and settings.
 
 <img src="docs/assets/spotpear-ball/mixed-displays.png" width="760" alt="Windows Displays panel with a Waveshare C6 and Spotpear Ball connected">

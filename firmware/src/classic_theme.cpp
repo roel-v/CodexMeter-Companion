@@ -9,6 +9,8 @@
 
 #include "config.h"
 
+LV_FONT_DECLARE(codexmeter_percent_126);
+
 namespace {
 
 constexpr int PANEL_W = CODEXMETER_SCREEN_W - 40;
@@ -43,15 +45,16 @@ const lv_color_t DIM = lv_color_hex(0x8d96a8);
 const lv_color_t CODEX_BLUE = lv_color_hex(0x18a8ff);
 const lv_color_t BATTERY_GREEN = lv_color_hex(0x2fda77);
 const lv_color_t BATTERY_YELLOW = lv_color_hex(0xffd43b);
+constexpr const char* TASK_NAMES[] = {"Running", "Waiting", "Done"};
 const lv_color_t BATTERY_RED = lv_color_hex(0xff4d4f);
 
 struct ClassicThemeState {
   lv_obj_t* root = nullptr;
   lv_obj_t* top_title = nullptr;
+  lv_obj_t* quota_notice = nullptr;
   lv_obj_t* top_battery = nullptr;
   lv_obj_t* top_battery_fill = nullptr;
   lv_obj_t* h5_content = nullptr;
-  lv_obj_t* quota_notice = nullptr;
   lv_obj_t* h5_pct = nullptr;
   lv_obj_t* h5_reset = nullptr;
   lv_obj_t* token_content = nullptr;
@@ -63,12 +66,15 @@ struct ClassicThemeState {
   lv_obj_t* task_values[3]{};
   lv_obj_t* panels[2]{};
   lv_obj_t* summary_costs[2]{};
+  lv_obj_t* quota = nullptr;
+  lv_obj_t* quota_percent = nullptr;
+  lv_obj_t* quota_reset = nullptr;
+  lv_obj_t* quota_counts[3]{};
   lv_obj_t* detail = nullptr;
   lv_obj_t* periods[2]{};
   lv_obj_t* detail_tokens[4]{};
   lv_obj_t* detail_costs[4]{};
   lv_obj_t* detail_note = nullptr;
-  lv_obj_t* page_hint = nullptr;
   bool tasks = false;
   lv_obj_t* activity_dots[ACTIVITY_MAX_DOTS]{};
   ThemeResources resources{};
@@ -354,13 +360,15 @@ void update_details(ClassicThemeState* state, const DashboardViewModel& model) {
     format_cost(cost, sizeof(cost), total.cents, total.has_cost, total.partial);
     snprintf(summary, sizeof(summary), "API est. %s", cost);
     lv_label_set_text(state->summary_costs[w], summary);
-    if (model.detail_page) lv_obj_add_flag(state->panels[w], LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_clear_flag(state->panels[w], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_flag(state->panels[w], LV_OBJ_FLAG_HIDDEN, model.page != ClassicPage::Dashboard);
     lv_obj_set_style_text_color(state->periods[w], w == (int)model.detail_week ? CODEX_BLUE : DIM, 0);
   }
-  if (model.detail_page) lv_obj_clear_flag(state->detail, LV_OBJ_FLAG_HIDDEN);
-  else lv_obj_add_flag(state->detail, LV_OBJ_FLAG_HIDDEN);
-  lv_label_set_text(state->page_hint, model.detail_page ? "2/2  Swipe for dashboard" : "1/2  Swipe for token details");
+  const bool quota = model.page == ClassicPage::WeeklyQuota;
+  lv_obj_set_flag(state->detail, LV_OBJ_FLAG_HIDDEN, model.page != ClassicPage::TokenDetails);
+  lv_obj_set_flag(state->quota, LV_OBJ_FLAG_HIDDEN, !quota);
+  lv_obj_set_flag(state->top_title, LV_OBJ_FLAG_HIDDEN, quota);
+  lv_label_set_text(state->quota_percent, model.usage_valid ? model.d7_percent_text : "--%");
+  lv_label_set_text(state->quota_reset, model.usage_valid ? model.d7_reset_text : "Reset in --");
   const auto& b = model.breakdown[model.detail_week ? 1 : 0];
   for (int i = 0; i < 4; ++i) {
     char text[32];
@@ -405,6 +413,35 @@ void tick_activity(ClassicThemeState* state, uint32_t now) {
   }
 }
 
+void make_quota_page(ClassicThemeState* state) {
+  constexpr int content_top = 70;
+  state->quota = lv_obj_create(state->root);
+  strip_obj(state->quota);
+  lv_obj_set_size(state->quota, CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H - content_top);
+  lv_obj_align(state->quota, LV_ALIGN_TOP_MID, 0, content_top);
+
+  // Screen coordinates account for the LVGL fonts' ascenders and baselines.
+  auto place = [&](lv_obj_t* label, int x, int y) {
+    lv_obj_align(label, LV_ALIGN_TOP_MID, x - CODEXMETER_SCREEN_W / 2, y - content_top);
+  };
+  constexpr int center = CODEXMETER_SCREEN_W / 2;
+  auto* heading = make_label(state->quota, "Weekly remaining", &lv_font_montserrat_32, DIM);
+  place(heading, center, 86);
+  state->quota_percent = make_label(state->quota, "--%", &codexmeter_percent_126, CODEX_BLUE);
+  place(state->quota_percent, center, 158);
+  state->quota_reset = make_label(state->quota, "Reset in --", &lv_font_montserrat_32, TEXT);
+  place(state->quota_reset, center, 279);
+
+  constexpr int columns[] = {82, center, 414};
+  for (int i = 0; i < 3; ++i) {
+    state->quota_counts[i] = make_label(state->quota, "--", &lv_font_montserrat_48, TEXT);
+    place(state->quota_counts[i], columns[i], 359);
+    auto* name = make_label(state->quota, TASK_NAMES[i], &lv_font_montserrat_24, DIM);
+    place(name, columns[i], 421);
+  }
+  lv_obj_add_flag(state->quota, LV_OBJ_FLAG_HIDDEN);
+}
+
 bool classic_mount(
     void* raw_state, lv_obj_t* parent,
     const ThemeResources& resources, bool tasks = false) {
@@ -429,6 +466,10 @@ bool classic_mount(
       state->root, "Usage remaining", resources.ui_font, TEXT);
   lv_obj_align(
       state->top_title, LV_ALIGN_TOP_MID, 0, TOP_TITLE_DEFAULT_Y);
+
+  state->quota_notice = make_label(state->root, "", &lv_font_montserrat_16, BATTERY_YELLOW);
+  lv_obj_align(state->quota_notice, LV_ALIGN_TOP_MID, 0, 53);
+  lv_obj_add_flag(state->quota_notice, LV_OBJ_FLAG_HIDDEN);
 
   lv_obj_t* battery_icon = make_battery_icon(state);
   lv_obj_align(battery_icon, LV_ALIGN_TOP_RIGHT, -18, 25);
@@ -467,10 +508,6 @@ bool classic_mount(
   lv_obj_align(
       state->token_7d_value, LV_ALIGN_BOTTOM_LEFT,
       TOKEN_RIGHT_COLUMN_X, tasks ? -1 : TOKEN_VALUE_Y_OFFSET);
-  state->quota_notice = make_label(state->root, "", &lv_font_montserrat_16, BATTERY_YELLOW);
-  lv_obj_align(state->quota_notice, LV_ALIGN_TOP_MID, 0, 53);
-  lv_obj_add_flag(state->quota_notice, LV_OBJ_FLAG_HIDDEN);
-
 
   lv_obj_t* divider = lv_obj_create(state->token_content);
   strip_obj(divider);
@@ -509,10 +546,9 @@ bool classic_mount(
     lv_obj_set_style_text_font(state->d7_reset, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(state->d7_reset, TEXT, 0);
     lv_obj_align(state->d7_reset, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    const char* names[] = {"Running", "Waiting", "Done"};
     const lv_color_t colors[] = {CODEX_BLUE, BATTERY_YELLOW, BATTERY_GREEN};
     for (int i = 0; i < 3; ++i) {
-      label = make_label(content_d7, names[i], &lv_font_montserrat_24, colors[i]);
+      label = make_label(content_d7, TASK_NAMES[i], &lv_font_montserrat_24, colors[i]);
       lv_obj_set_pos(label, 202, 5 + i * 42);
       state->task_values[i] = make_label(content_d7, "--", &lv_font_montserrat_24, TEXT);
       lv_obj_set_width(state->task_values[i], 64);
@@ -564,8 +600,7 @@ bool classic_mount(
     state->detail_note = make_label(state->detail, "Waiting for token breakdown", &lv_font_montserrat_16, DIM);
     lv_obj_align(state->detail_note, LV_ALIGN_BOTTOM_MID, 0, -14);
     lv_obj_add_flag(state->detail, LV_OBJ_FLAG_HIDDEN);
-    state->page_hint = make_label(state->root, "1/2  Swipe for token details", &lv_font_montserrat_16, DIM);
-    lv_obj_align(state->page_hint, LV_ALIGN_TOP_MID, 0, 430);
+    make_quota_page(state);
   }
   return true;
 }
@@ -573,15 +608,24 @@ bool classic_mount(
 void classic_update(
     void* raw_state, const DashboardViewModel& model) {
   auto* state = static_cast<ClassicThemeState*>(raw_state);
+  const bool stale = model.data_state == DashboardDataState::Stale;
+  lv_obj_set_flag(state->quota_notice, LV_OBJ_FLAG_HIDDEN, !stale);
+  if (stale) {
+    lv_label_set_text_static(state->quota_notice,
+        model.h5_remaining >= 0 || model.d7_remaining >= 0 ? "Quota stale" : "Quota unavailable");
+  }
   update_usage(state, model);
   update_details(state, model);
   update_activity(state, model.running_count);
   if (state->tasks) {
     const int counts[] = {model.running_count, model.waiting_count, model.done_count};
     for (int i = 0; i < 3; ++i) {
-      if (counts[i] < 0) lv_label_set_text(state->task_values[i], "--");
-      else if (counts[i] > 999) lv_label_set_text(state->task_values[i], "999+");
-      else lv_label_set_text_fmt(state->task_values[i], "%d", counts[i]);
+      char text[12];
+      if (counts[i] < 0) strcpy(text, "--");
+      else if (counts[i] > 999) strcpy(text, "999+");
+      else snprintf(text, sizeof(text), "%d", counts[i]);
+      lv_label_set_text(state->task_values[i], text);
+      lv_label_set_text(state->quota_counts[i], text);
     }
   }
   update_battery(
@@ -608,12 +652,6 @@ const ThemeDashboardOps CLASSIC_DASHBOARD = {
 
 const ThemePack CLASSIC_THEME = {
     "classic",
-  const bool stale = model.data_state == DashboardDataState::Stale;
-  lv_obj_set_flag(state->quota_notice, LV_OBJ_FLAG_HIDDEN, !stale);
-  if (stale) {
-    lv_label_set_text_static(state->quota_notice,
-        model.h5_remaining >= 0 || model.d7_remaining >= 0 ? "Quota stale" : "Quota unavailable");
-  }
     "Classic",
     1,
     CODEXMETER_BURN_IN_DRIFT_MAX_PX,

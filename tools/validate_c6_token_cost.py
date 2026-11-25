@@ -54,14 +54,19 @@ def validate(port_name, output):
         command(json.dumps(payload, separators=(',', ':')), 'usage h5=')
         command('test_tap_today', 'week=0')
         capture(port, output / 'details-partial.png')
+        command('test_swipe', 'token page=2')
+        capture(port, output / 'weekly-quota.png')
+        command('test_swipe', 'token page=0')
+        command('test_swipe_back', 'token page=2')
+        command('test_swipe_back', 'token page=1')
         results['heaps'] = []
         for i in range(12):
             command('test_swipe', 'token page=')
             port.write_line('lvheap')
             time.sleep(.2)
             results['heaps'].append(command('logs 3', 'lv_mem serial '))
-        # Even number of toggles leaves details visible; return to dashboard.
-        command('test_swipe', 'token page=0')
+        # Four complete cycles leave details visible.
+        command('test_swipe_back', 'token page=0')
         for r in range(4):
             command(f'rotate {r}', f'ROTATION {r}')
             time.sleep(1)

@@ -94,7 +94,7 @@ ThemeRotationPolicy rotation_policy;
 UsageModel app_usage;
 ActivityModel app_activity;
 DashboardViewModel dashboard_model;
-bool token_detail_page = false;
+ClassicPage classic_page = ClassicPage::Dashboard;
 bool token_detail_week = false;
 int app_battery_percent = -1;
 bool app_charging = false;
@@ -295,7 +295,7 @@ void refresh_dashboard_model(uint32_t now_ms) {
       app_usage, app_activity, app_battery_percent,
       app_charging, now_ms);
   dashboard_last_refresh_ms = now_ms;
-  dashboard_model.detail_page = token_detail_page;
+  dashboard_model.page = classic_page;
   dashboard_model.detail_week = token_detail_week;
   theme_runtime.update(dashboard_model);
 }
@@ -967,12 +967,14 @@ void ui_touch_gesture(int dx, int dy, int x, int y, bool tap) {
   if (!display_active || waiting_for_companion || settings_active || ui_alert_visible()) return;
   if (strcmp(theme_runtime.current_id(), "classic_tasks") != 0) return;
   if (!tap && abs(dx) >= 60 && abs(dx) > abs(dy) * 2) {
-    token_detail_page = !token_detail_page;
-  } else if (tap && token_detail_page && y >= 70 && y <= 140) {
+    constexpr int pages = static_cast<int>(ClassicPage::Count);
+    const int step = dx < 0 ? 1 : pages - 1;
+    classic_page = static_cast<ClassicPage>((static_cast<int>(classic_page) + step) % pages);
+  } else if (tap && classic_page == ClassicPage::TokenDetails && y >= 70 && y <= 140) {
     token_detail_week = x >= CODEXMETER_SCREEN_W / 2;
   } else return;
   refresh_dashboard_model(millis());
-  device_logf("INFO", "token page=%d week=%d", token_detail_page, token_detail_week);
+  device_logf("INFO", "token page=%d week=%d", static_cast<int>(classic_page), token_detail_week);
 }
 
 void ui_settings_move(int direction) {
@@ -1076,7 +1078,11 @@ void ui_set_volume(int percent) {
 int ui_volume() {
   return device_settings_get().volume_percent;
 }
-int ui_page() { return token_detail_page ? (token_detail_week ? 2 : 1) : 0; }
+int ui_page() {
+  // Preserve the device-state IDs for the dashboard and both token periods.
+  if (classic_page == ClassicPage::TokenDetails) return token_detail_week ? 2 : 1;
+  return classic_page == ClassicPage::WeeklyQuota ? 3 : 0;
+}
 
 #include "validation_view.h"
 void ui_validation_state(Print& output) {

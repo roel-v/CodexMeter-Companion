@@ -645,6 +645,8 @@ static void handle_raw_line(const char* buf) {
         Serial.println("TEST_UI off");
       } else if (strcmp(buf, "test_swipe") == 0) {
         ui_touch_gesture(-120, 0, 180, 200, false);
+      } else if (strcmp(buf, "test_swipe_back") == 0) {
+        ui_touch_gesture(120, 0, 180, 200, false);
       } else if (strcmp(buf, "touch_status") == 0) {
         touch_input_diagnostics();
       } else if (strcmp(buf, "test_tap_today") == 0) {

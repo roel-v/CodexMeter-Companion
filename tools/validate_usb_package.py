@@ -100,8 +100,12 @@ with MaintenanceGuard(sys.argv[2],sys.argv[3]), SerialSession(sys.argv[2]) as po
             commands=[f"brightness {state['brightness']}", 'rotate auto' if state['auto_rotation'] else f"rotate {state['rotation']}"]
             current=next(d['device_state'] for d in self.devices() if d['device_id']==IDS[index])
             if index==0:
-                if bool(current['page'])!=bool(state['page']):commands.append('test_swipe')
-                if state['page']:commands.append('test_tap_week' if state['page']==2 else 'test_tap_today')
+                # Today and 7 days share the middle swipe position.
+                positions = (0, 1, 1, 2)
+                steps = (positions[state['page']] - positions[current['page']]) % 3
+                commands.extend(['test_swipe'] * steps)
+                if state['page'] in (1, 2):
+                    commands.append('test_tap_week' if state['page'] == 2 else 'test_tap_today')
             else:commands+=['test_swipe']*((state['page']-current['page'])%3)
             toolenv=dict(self.env);toolenv['PYTHONPATH']=str(ROOT)
             result=subprocess.run([sys.executable,'-c',code,str(ROOT/'tools'),PORTS[index],IDS[index],*commands],env=toolenv,cwd=self.home,capture_output=True,text=True,timeout=45)
