@@ -17,7 +17,8 @@ def test_service_power_events_grace_cleanup_and_late_callbacks(duration):
             def start(self, notify): self.notify = notify; return True
             def close(self): self.closed = True
         source = Source(); stop = asyncio.Event()
-        task = asyncio.create_task(power_event_loop(monitor, stop, source=source))
+        resumes = []
+        task = asyncio.create_task(power_event_loop(monitor, stop, source=source, on_resume=lambda: resumes.append(True)))
         await asyncio.sleep(0)
         clock.advance(monitor, 40)
         before = monitor.records["quota"].elapsed
@@ -28,6 +29,7 @@ def test_service_power_events_grace_cleanup_and_late_callbacks(duration):
         grace = monitor.grace_until
         clock.advance(monitor, 10)
         source.notify(False); await asyncio.sleep(0)
+        assert resumes == [True]
         assert monitor.grace_until == grace  # automatic/user resume pair is one resume
         clock.advance(monitor, 20)
         assert monitor.records["quota"].elapsed == before

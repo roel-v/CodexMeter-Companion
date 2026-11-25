@@ -76,6 +76,18 @@ class UsageSnapshotStabilizer:
         self.pending_count = 0
 
     def stabilize(self, snapshot: UsageSnapshot) -> UsageSnapshotDecision:
+        if snapshot.status == "stale":
+            self.pending = None
+            self.pending_reason = None
+            self.pending_count = 0
+            if self.trusted is not None:
+                snapshot = replace(snapshot,
+                    h5_remaining_percent=self.trusted.h5_remaining_percent,
+                    h5_resets_at=self.trusted.h5_resets_at,
+                    d7_remaining_percent=self.trusted.d7_remaining_percent,
+                    d7_resets_at=self.trusted.d7_resets_at)
+            return UsageSnapshotDecision(snapshot, accepted=False, reason="quota_unavailable")
+
         if self.trusted is None:
             self._accept(snapshot)
             return UsageSnapshotDecision(snapshot, accepted=True, reason="initial")
@@ -105,7 +117,7 @@ class UsageSnapshotStabilizer:
             )
 
         assert self.trusted is not None
-        trusted = replace(self.trusted, generated_at=snapshot.generated_at)
+        trusted = replace(self.trusted, generated_at=snapshot.generated_at, status="stale")
         return UsageSnapshotDecision(trusted, accepted=False, reason=reason)
 
     def _accept(self, snapshot: UsageSnapshot) -> None:

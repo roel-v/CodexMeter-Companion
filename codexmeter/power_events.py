@@ -52,7 +52,7 @@ class WindowsPowerEvents:
             self.handle = ctypes.c_void_p()
 
 
-async def power_event_loop(monitor, stop_event, *, source=None):
+async def power_event_loop(monitor, stop_event, *, source=None, on_resume=None):
     source = source or WindowsPowerEvents()
     loop = asyncio.get_running_loop()
     active = True
@@ -63,6 +63,8 @@ async def power_event_loop(monitor, stop_event, *, source=None):
         if active and suspended != last:
             last = suspended
             monitor.power(suspended)
+            if not suspended and on_resume is not None:
+                on_resume()
 
     def notify(suspended):
         if active and not loop.is_closed():

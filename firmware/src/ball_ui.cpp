@@ -16,7 +16,7 @@ bool reveal_pending=false;
 UsageModel usage;
 ActivityModel activity;
 lv_obj_t *pages[3], *waiting_panel, *alert_panel, *alert_title, *alert_body;
-lv_obj_t *percent, *reset, *counts[3], *status[3], *tokens[2][4], *costs[2][4], *footers[2];
+lv_obj_t *quota_heading, *percent, *reset, *counts[3], *status[3], *tokens[2][4], *costs[2][4], *footers[2];
 
 void visible(lv_obj_t* o,bool value) {
   if(value) lv_obj_remove_flag(o,LV_OBJ_FLAG_HIDDEN);
@@ -57,6 +57,9 @@ void cost_text(char* out,size_t size,uint64_t cents,bool valid,bool partial) {
 }
 void refresh() {
   const auto m=build_dashboard_view_model(usage,activity,-1,false,millis());
+  const bool stale = m.data_state == DashboardDataState::Stale;
+  lv_label_set_text_static(quota_heading, !stale ? "Weekly remaining" :
+      m.d7_remaining >= 0 ? "Weekly remaining (stale)" : "Quota unavailable");
   lv_label_set_text(percent,m.usage_valid?m.d7_percent_text:"--%");
   lv_label_set_text(reset,m.usage_valid?m.d7_reset_text:"Reset in --");
   const int values[]={m.running_count,m.waiting_count,m.done_count};
@@ -85,7 +88,7 @@ void refresh() {
     const char* note=!b.valid?"Breakdown unavailable":
         b.unknown?"Partial data / API cost":
         b.partial?"Some usage unpriced (+)":"API cost estimate";
-    if(m.data_state==DashboardDataState::Stale) note="Stale data";
+    if(stale) note="Quota stale";
     else if(m.data_state==DashboardDataState::Error) note="Telemetry unavailable";
     lv_label_set_text(footers[w],note);
   }
@@ -100,7 +103,7 @@ void ui_init(const UiSystemHooks&) {
     for(int d=0;d<3;++d) label(pages[p],LV_SYMBOL_BULLET,101+d*14,216,10,
         &lv_font_montserrat_12,d==p?BLUE:0x394351);
   }
-  label(pages[0],"Weekly remaining",35,45,170,&lv_font_montserrat_14,DIM);
+  quota_heading=label(pages[0],"Weekly remaining",25,45,190,&lv_font_montserrat_14,DIM);
   percent=label(pages[0],"--%",30,66,180,&lv_font_montserrat_48,BLUE);
   reset=label(pages[0],"Reset in --",25,125,190,&lv_font_montserrat_16);
   auto* line=lv_obj_create(pages[0]);lv_obj_remove_style_all(line);

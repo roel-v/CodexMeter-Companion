@@ -139,6 +139,8 @@ def test_unresolved_evidence_survives_closed_restart(tmp_path):
 
 
 def test_empty_inventory_recovery_requires_fresh_reads(monkeypatch):
+    # This fixture supplies a legacy pipe, independently of the user's Windows setup.
+    monkeypatch.setattr("codexmeter.desktop_wrapper.enabled", lambda: False)
     from codexmeter import chat_activity as activity
     from tests.support.compatibility import Clock
     async def run():

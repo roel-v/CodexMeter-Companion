@@ -112,6 +112,47 @@ def test_usage_cache_ignores_suspicious_empty_d7_snapshot(tmp_path):
     assert load_cached_usage_snapshot(path) is None
 
 
+def test_quota_outage_resume_and_restart(monkeypatch, tmp_path):
+    from dataclasses import replace
+    from unittest.mock import AsyncMock
+    from codexmeter import daemon
+
+    path = tmp_path / "quota.json"
+    monkeypatch.setattr(daemon, "load_cached_usage_snapshot", lambda: load_cached_usage_snapshot(path))
+    monkeypatch.setattr(daemon, "save_cached_usage_snapshot", lambda s: save_cached_usage_snapshot(s, path))
+    live = UsageSnapshot("codex", None, None, 74, 20000, "ok", 1000, 101, 500)
+    outage = UsageSnapshot("codex", None, None, None, None, "stale", 1100, 106, 505)
+    recovered = replace(live, d7_remaining_percent=73, generated_at=1200)
+
+    async def poll(readings, count, wake_after_first=False):
+        sent = []
+        stop, resume = asyncio.Event(), asyncio.Event()
+        provider = AsyncMock()
+        provider.fetch.side_effect = readings
+        async def sink(payload):
+            sent.append(payload.data)
+            if wake_after_first and len(sent) == 1:
+                resume.set()
+            if len(sent) == count:
+                stop.set()
+        await asyncio.wait_for(daemon.quota_loop(provider, sink, stop, 0, resume), 2)
+        return sent
+
+    sent = asyncio.run(poll([live, outage, TimeoutError()], 4, wake_after_first=True))
+    assert [p["st"] for p in sent] == ["ok", "stale", "stale", "stale"]
+    assert all((p["d7"], p["d7r"], p["h5"]) == (74, 20000, None) for p in sent)
+    assert sent[2]["td"] == 106 and sent[2]["t7"] == 505
+    assert load_cached_usage_snapshot(path) == live
+
+    sent = asyncio.run(poll([outage, recovered], 3))
+    assert [(p["st"], p["d7"]) for p in sent] == [("stale", 74), ("stale", 74), ("ok", 73)]
+    assert load_cached_usage_snapshot(path) == recovered
+
+    save_cached_usage_snapshot(outage, path)  # Cache from an older version.
+    sent = asyncio.run(poll([outage, recovered], 2))
+    assert [(p["st"], p["d7"]) for p in sent] == [("stale", None), ("ok", 73)]
+
+
 def test_daemon_lock_rejects_second_instance(tmp_path):
     path = tmp_path / "daemon.lock"
     with DaemonLock(path):

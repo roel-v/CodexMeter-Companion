@@ -51,6 +51,7 @@ struct ClassicThemeState {
   lv_obj_t* top_battery = nullptr;
   lv_obj_t* top_battery_fill = nullptr;
   lv_obj_t* h5_content = nullptr;
+  lv_obj_t* quota_notice = nullptr;
   lv_obj_t* h5_pct = nullptr;
   lv_obj_t* h5_reset = nullptr;
   lv_obj_t* token_content = nullptr;
@@ -466,6 +467,10 @@ bool classic_mount(
   lv_obj_align(
       state->token_7d_value, LV_ALIGN_BOTTOM_LEFT,
       TOKEN_RIGHT_COLUMN_X, tasks ? -1 : TOKEN_VALUE_Y_OFFSET);
+  state->quota_notice = make_label(state->root, "", &lv_font_montserrat_16, BATTERY_YELLOW);
+  lv_obj_align(state->quota_notice, LV_ALIGN_TOP_MID, 0, 53);
+  lv_obj_add_flag(state->quota_notice, LV_OBJ_FLAG_HIDDEN);
+
 
   lv_obj_t* divider = lv_obj_create(state->token_content);
   strip_obj(divider);
@@ -603,6 +608,12 @@ const ThemeDashboardOps CLASSIC_DASHBOARD = {
 
 const ThemePack CLASSIC_THEME = {
     "classic",
+  const bool stale = model.data_state == DashboardDataState::Stale;
+  lv_obj_set_flag(state->quota_notice, LV_OBJ_FLAG_HIDDEN, !stale);
+  if (stale) {
+    lv_label_set_text_static(state->quota_notice,
+        model.h5_remaining >= 0 || model.d7_remaining >= 0 ? "Quota stale" : "Quota unavailable");
+  }
     "Classic",
     1,
     CODEXMETER_BURN_IN_DRIFT_MAX_PX,

@@ -108,6 +108,7 @@ async def quota_loop(
     sink: PayloadSink,
     stop_event: asyncio.Event,
     poll_interval: int,
+    resumed: asyncio.Event,
 ) -> None:
     from .compatibility import SupersededObservation
     cached_snapshot = load_cached_usage_snapshot()
@@ -126,9 +127,23 @@ async def quota_loop(
         build_usage_payload(cached_snapshot) if cached_snapshot is not None else None
     )
     stabilizer = UsageSnapshotStabilizer(trusted=cached_snapshot)
+    replay_cached = cached_snapshot is not None
     while not stop_event.is_set():
+        if replay_cached or resumed.is_set():
+            resumed.clear()
+            replay_cached = False
+            if last_usage_payload is not None:
+                await sink(build_stale_usage_payload(last_usage_payload))
         try:
-            raw_snapshot = await provider.fetch()
+            try:
+                raw_snapshot = await provider.fetch()
+            except (asyncio.CancelledError, SupersededObservation):
+                raise
+            except Exception:
+                logging.exception("Failed to fetch Codex usage")
+                raw_snapshot = UsageSnapshot("codex", None, None, None, None, "stale", int(time.time()))
+            if resumed.is_set():
+                continue  # A pre-sleep request cannot confirm post-resume freshness.
             if getattr(provider, "monitor", None) is None:
                 raw_snapshot = merge_missing_token_activity(raw_snapshot, stabilizer.trusted)
             if stabilizer.trusted is None and is_suspicious_initial_snapshot(raw_snapshot):
@@ -165,7 +180,8 @@ async def quota_loop(
                 logging.info("Queued stale usage heartbeat after fetch failure")
 
         try:
-            await asyncio.wait_for(stop_event.wait(), timeout=poll_interval)
+            if not stop_event.is_set():
+                await asyncio.wait_for(resumed.wait(), timeout=poll_interval)
         except asyncio.TimeoutError:
             pass
 
@@ -175,7 +191,7 @@ def log_usage_decision(
     decision: UsageSnapshotDecision,
 ) -> None:
     snapshot = decision.snapshot
-    if decision.accepted:
+    if decision.accepted or decision.reason == "quota_unavailable":
         logging.info(
             "Queued usage h5=%s d7=%s h5r=%s d7r=%s td=%s t7=%s status=%s decision=%s",
             snapshot.h5_remaining_percent,
@@ -216,6 +232,8 @@ def load_cached_usage_snapshot(
     if not isinstance(data, dict):
         return None
     snapshot = usage_snapshot_from_cache(data)
+    if snapshot is not None and snapshot.status == "stale":
+        return None  # Older companions could overwrite the cache during an outage.
     if snapshot is not None and is_suspicious_initial_snapshot(snapshot):
         logging.warning("Ignoring suspicious cached usage snapshot")
         return None
@@ -386,6 +404,11 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
     sleep_preference = SleepPreference(APP_DIR)
     guard = CodexSleepGuard(sleep_preference.enabled()) if chats and args.prevent_sleep else None
 
+    wrapper_setup = None
+    if chats is not None:
+        from .desktop_wrapper import WrapperSetup
+        wrapper_setup = WrapperSetup(APP_DIR)
+
     def sleep_status():
         return {"wrapper_setup_error": wrapper_setup.error if wrapper_setup else "",
                 "wrapper_restart_needed": bool(chats and chats.status.get("reason") == "wrapper_inactive"),
@@ -406,21 +429,19 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         if chats is not None:
             status["chat_activity"] = dict(chats.status, **sleep_status())
         if desktop is not None:
-    wrapper_setup = None
-    if chats is not None:
-        from .desktop_wrapper import WrapperSetup
-        wrapper_setup = WrapperSetup(APP_DIR)
-
             status["tray"] = desktop.snapshot
         return status
 
     from .power_events import power_event_loop
+    quota_resumed = asyncio.Event()
 
     async def compatibility_loop():
         from .compatibility_versions import local_versions
         next_versions = 0
         while not stop_event.is_set():
             try:
+                if wrapper_setup is not None:
+                    await asyncio.to_thread(wrapper_setup.reconcile)
                 if time.monotonic() >= next_versions:
                     monitor.versions = await asyncio.to_thread(local_versions, args.codex_bin)
                     monitor.host_presence(monitor.versions.get("desktop_running"))
@@ -440,8 +461,6 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             except asyncio.CancelledError:
                 raise
             except Exception:
-                if wrapper_setup is not None:
-                    await asyncio.to_thread(wrapper_setup.reconcile)
                 logging.warning("Compatibility monitor observation failed")
             await asyncio.sleep(1)
 
@@ -470,9 +489,9 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
                                 if guard else chats.run(manager.broadcast, stop_event))} if chats else {}),
             **({"tray_status": tray_status_loop()} if desktop is not None else {}),
             **({"compatibility": compatibility_loop(),
-                "power_events": power_event_loop(monitor, stop_event)} if not validation_mode else {}),
+                "power_events": power_event_loop(monitor, stop_event, on_resume=quota_resumed.set)} if not validation_mode else {}),
             "events": event_server.run(stop_event),
-            **({"quota": quota_loop(provider, sink, stop_event, args.poll_interval),
+            **({"quota": quota_loop(provider, sink, stop_event, args.poll_interval, quota_resumed),
                 "pricing": pricing_monitor_loop(stop_event, desktop),
                 "updates": update_monitor_loop(stop_event, desktop)} if not validation_mode else {}),
             "screen_policy": screen_policy_loop(
