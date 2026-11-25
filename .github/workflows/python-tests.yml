@@ -17,6 +17,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Test the Desktop wrapper
+        if: runner.os == 'Windows'
+        working-directory: tools/desktop-wrapper
+        shell: pwsh
+        run: |
+          $env:TEMP = 'D:\codexmeter-wrapper-tmp'
+          $env:TMP = $env:TEMP
+          New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
+          go test ./...
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

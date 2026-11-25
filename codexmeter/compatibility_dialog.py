@@ -6,6 +6,10 @@ from tkinter import ttk
 from .compatibility import COMPONENTS
 
 EXPLANATIONS = {
+    "wrapper_missing": "The installed chat-status helper is missing. Enable the Desktop wrapper again to repair it.",
+    "wrapper_inactive": "Desktop has no live wrapper connection. Fully quit Desktop and reopen it from Start. If this persists after an update, check for a CodexMeter update.",
+    "wrapper_listener": "Desktop started with its normal connection because the wrapper could not open a private socket. Check for a CodexMeter update.",
+    "wrapper_protocol": "Desktop's live-status response has changed. Check for a CodexMeter update.",
     "unsupported_version": "Codex is using a data format this version of CodexMeter does not understand.",
     "schema": "A required Codex database field is missing.",
     "structure": "Codex data no longer matches the expected structure.",
@@ -91,7 +95,10 @@ def show_compatibility(root, get_snapshot):
                 continue
             confirmed |= bool(row.get("unresolved_incompatibility"))
             lines.append(COMPONENTS[key][0] + ": " + row.get("state", "unknown"))
-            lines.append(EXPLANATIONS.get(row.get("reason"), EXPLANATIONS["reader_error"]))
+            if key == "stream" and row.get("reason") == "missing":
+                lines.append("Desktop is missing its legacy pipe. Open the control panel and enable the Desktop wrapper for live chat counts.")
+            else:
+                lines.append(EXPLANATIONS.get(row.get("reason"), EXPLANATIONS["reader_error"]))
             if row.get("unresolved_incompatibility"):
                 lines.append("A format incompatibility remains unresolved until fresh valid readings resume.")
             lines.append("")

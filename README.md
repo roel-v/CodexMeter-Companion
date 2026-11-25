@@ -105,6 +105,13 @@ after Codex updates.
 
 For multiple displays, open **Displays** to check each connection and control
 supported settings separately. They share the same usage and chat data while
+On Windows, the companion installs the Desktop wrapper automatically for live
+**Running** and **Waiting** counts. If Codex Desktop is already open on first
+run, quit it after your chats finish and reopen it from Start. Clear **Use Desktop
+wrapper for live chat counts** to opt out. The wrapper
+finds the bundled CLI again on each launch. **Codex data status / details**
+shows whether the companion can read the current version.
+
 keeping their own page and settings.
 
 <img src="docs/assets/spotpear-ball/mixed-displays.png" width="760" alt="Windows Displays panel with a Waveshare C6 and Spotpear Ball connected">

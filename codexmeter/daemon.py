@@ -387,7 +387,9 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
     guard = CodexSleepGuard(sleep_preference.enabled()) if chats and args.prevent_sleep else None
 
     def sleep_status():
-        return {"preventing_sleep": bool(guard and guard.handle),
+        return {"wrapper_setup_error": wrapper_setup.error if wrapper_setup else "",
+                "wrapper_restart_needed": bool(chats and chats.status.get("reason") == "wrapper_inactive"),
+                "preventing_sleep": bool(guard and guard.handle),
                 "prevent_sleep_enabled": bool(guard and guard.enabled),
                 "prevent_sleep_overridden": not args.prevent_sleep}
 
@@ -404,6 +406,11 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         if chats is not None:
             status["chat_activity"] = dict(chats.status, **sleep_status())
         if desktop is not None:
+    wrapper_setup = None
+    if chats is not None:
+        from .desktop_wrapper import WrapperSetup
+        wrapper_setup = WrapperSetup(APP_DIR)
+
             status["tray"] = desktop.snapshot
         return status
 
@@ -433,6 +440,8 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             except asyncio.CancelledError:
                 raise
             except Exception:
+                if wrapper_setup is not None:
+                    await asyncio.to_thread(wrapper_setup.reconcile)
                 logging.warning("Compatibility monitor observation failed")
             await asyncio.sleep(1)
 

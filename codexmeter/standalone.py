@@ -31,6 +31,16 @@ def self_test(output: Path) -> int:
         result["external_panel"] = check_panel(root, app)
         from .sleep_guard import SleepPreference
         import tempfile
+        from .desktop_wrapper import bundled_binary
+        with tempfile.TemporaryDirectory(prefix="codexmeter-wrapper-check-") as scratch:
+            helper = Path(scratch) / "CodexMeterDesktopCLI.exe"
+            helper.write_bytes(bundled_binary())
+            import os
+            snapshot = subprocess.run([str(helper), "--meter-snapshot"], input="[]", capture_output=True,
+                                      text=True, timeout=15, check=True, creationflags=subprocess.CREATE_NO_WINDOW,
+                                      env={**os.environ, "CODEX_HOME": scratch})
+            assert json.loads(snapshot.stdout)["health"] == "inactive"
+        result["desktop_wrapper"] = True
         live_preference = app.sleep_preference
         try:
             with tempfile.TemporaryDirectory(prefix="codexmeter-power-check-") as scratch:

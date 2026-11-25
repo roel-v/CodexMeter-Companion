@@ -73,6 +73,15 @@ class MeterApp:
         from .update_dialog import show_updates
         ttk.Button(controls, text="Updates", command=lambda: show_updates(self.root)).pack(side="left", padx=5)
         from .compatibility_dialog import show_compatibility
+        from .desktop_wrapper import WrapperPreference
+        wrapper = ttk.Frame(frame)
+        wrapper.pack(fill="x", pady=(0, 6))
+        self.wrapper_settings = WrapperPreference()
+        self.wrapper_preference = tk.BooleanVar(value=self.wrapper_settings.wanted())
+        ttk.Checkbutton(wrapper, text="Use Desktop wrapper for live chat counts",
+                        variable=self.wrapper_preference, command=self.save_wrapper_preference).pack(side="left")
+        self.wrapper_note = tk.StringVar()
+        ttk.Label(frame, textvariable=self.wrapper_note, wraplength=720).pack(anchor="w")
         power = ttk.Frame(frame)
         power.pack(fill="x", pady=(0, 6))
         self.sleep_preference = SleepPreference()
@@ -100,6 +109,16 @@ class MeterApp:
         ttk.Label(frame, text=footer).pack(anchor="w", pady=(10, 0))
         self.poll_after = root.after(100, self.poll)
         root.bind("<Destroy>", self._on_destroy, add="+")
+
+    def save_wrapper_preference(self):
+        from tkinter import messagebox
+        try:
+            self.wrapper_settings.save(self.wrapper_preference.get())
+        except (OSError, RuntimeError) as exc:
+            messagebox.showerror("Desktop wrapper", str(exc), parent=self.root)
+        else:
+            messagebox.showinfo("Desktop wrapper", "When your chats finish, fully quit Codex Desktop and reopen it from Start to apply this change.", parent=self.root)
+        self.wrapper_preference.set(self.wrapper_settings.wanted())
 
     def _on_destroy(self, event):
         if event.widget is self.root:
@@ -173,6 +192,9 @@ class MeterApp:
             messagebox.showerror("Keep this PC awake", str(exc), parent=self.root)
 
     def show_sleep_status(self, activity):
+        self.wrapper_note.set(activity.get("wrapper_setup_error") or
+                              ("Fully quit Codex Desktop and reopen it from Start to connect live chat counts."
+                               if activity.get("wrapper_restart_needed") else ""))
         overridden = activity.get("prevent_sleep_overridden") is True
         self.sleep_checkbox.configure(state="disabled" if overridden else "normal")
         self.keep_awake.set(False if overridden else self.sleep_preference.enabled())

@@ -16,6 +16,7 @@ if (-not (Test-Path -LiteralPath $MeterPython)) {
 }
 & uv pip install --python $MeterPython -e $PSScriptRoot pytest platformio
 if ($LASTEXITCODE) { throw 'Dependency installation failed.' }
+& "$PSScriptRoot\scripts\build-desktop-wrapper.ps1" -BuildRoot $BuildRoot
 Push-Location $PSScriptRoot
 try {
     if ($Test) {

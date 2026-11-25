@@ -106,3 +106,42 @@ def test_available_status_clears_failure_reason():
     tracker.status["reason"] = "unsupported_stream_version"
     tracker._payload(True, (1, 0, 0))
     assert tracker.status["reason"] is None
+
+def test_missing_pipe_uses_desktop_badges_for_done(tmp_path, monkeypatch):
+    import asyncio
+    from codexmeter.chat_activity import DesktopPipeMissing
+
+    with sqlite3.connect(tmp_path / "state_5.sqlite") as db:
+        db.executescript("""
+            CREATE TABLE threads(id, archived, source);
+            CREATE TABLE thread_spawn_edges(child_thread_id);
+            CREATE TABLE thread_read_receipts(thread_id, first_unread_turn);
+            INSERT INTO threads VALUES ('badge',0,'vscode'),('receipt-only',0,'cli'),('busy',0,'vscode');
+            INSERT INTO thread_read_receipts VALUES ('receipt-only','first');
+        """)
+    with sqlite3.connect(tmp_path / "thread_history_1.sqlite") as db:
+        db.executescript("""
+            CREATE TABLE thread_turns(thread_id,rollout_ordinal,status);
+            INSERT INTO thread_turns VALUES ('badge',1,'completed'),('receipt-only',1,'completed'),
+              ('busy',1,'inProgress');
+        """)
+    async def missing(*args):
+        raise DesktopPipeMissing()
+
+    tracker = ChatActivity(tmp_path)
+    monkeypatch.setattr(tracker, "_observe", missing)
+
+    async def sample(unread):
+        (tmp_path / ".codex-global-state.json").write_text(json.dumps({
+            "electron-thread-read-state-v1": {"unreadByIdentity": {"account": {"local:host": unread}}}
+        }))
+        stop = asyncio.Event()
+        async def receive(payload):
+            assert payload.data["chats"]
+            assert payload.data["run"] is payload.data["wait"] is None
+            stop.set()
+        await tracker.run(receive, stop)
+        return tracker.payload.data["done"]
+
+    assert asyncio.run(sample(["badge", "busy"])) == 1
+    assert asyncio.run(sample(["busy"])) == 0

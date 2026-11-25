@@ -27,6 +27,10 @@ WAIT_FLAGS = {"waitingOnApproval", "waitingOnUserInput"}
 from .compatibility_readers import SUPPORTED_STREAM_VERSIONS
 
 
+class DesktopPipeMissing(FileNotFoundError):
+    """The desktop is not serving the legacy chat stream."""
+
+
 class UnsupportedStreamVersion(ContractError):
     """The private stream changed; do not interpret unknown state semantics."""
 
@@ -133,8 +137,12 @@ class ChatActivity:
     async def run(self, sink, stop_event):
         last_failure = None
         last_logged = 0.0
+        pipe_missing = False
         while not stop_event.is_set():
-            observation = self.monitor.reader(("stream", "inventory", "unread")) if self.monitor else None
+            observation = self.monitor.reader(
+                ("stream", "inventory", "unread"), reset=not pipe_missing
+            ) if self.monitor else None
+            pipe_missing = False
             try:
                 await self._observe(sink, stop_event, observation)
             except SupersededObservation:
@@ -157,7 +165,9 @@ class ChatActivity:
                 if self.monitor and self.desktop_running is False:
                     for component in ("stream", "inventory", "unread"):
                         self.monitor.observe(component, "unavailable", "closed", eligible=False)
-                reason = ("unsupported_stream_version" if isinstance(exc, UnsupportedStreamVersion)
+                pipe_missing = isinstance(exc, DesktopPipeMissing)
+                reason = ("desktop_stream_missing" if pipe_missing else
+                          "unsupported_stream_version" if isinstance(exc, UnsupportedStreamVersion)
                           else "observer_error")
                 self.status["reason"] = reason
                 failure = (type(exc).__name__, locations)
@@ -167,21 +177,123 @@ class ChatActivity:
                                     type(exc).__name__, reason, locations)
                     last_failure, last_logged = failure, now
             self.payload = self._payload(False)
+            if pipe_missing and self.desktop_running is not False:
+                await self._recover_done(observation)
             await sink(self.payload)
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=5)
             except TimeoutError:
                 pass
 
+    async def _recover_done(self, monitor):
+        try:
+            roots = await asyncio.to_thread(read_roots, self.home)
+            if monitor:
+                monitor.check()
+                monitor.observe("inventory")
+        except SupersededObservation:
+            raise
+        except Exception as exc:
+            report_error(monitor, "inventory", exc)
+            return
+        try:
+            completed, context = await asyncio.to_thread(read_unread_snapshot, self.home, roots)
+            if monitor:
+                monitor.check()
+                monitor.bind("unread", context)
+                monitor.observe("unread")
+                if monitor.records["unread"].state != "compatible":
+                    return
+        except SupersededObservation:
+            raise
+        except LookupError:
+            if monitor:
+                monitor.observe("unread", "unavailable", "ambiguous_account")
+            return
+        except Exception as exc:
+            report_error(monitor, "unread", exc)
+            return
+        self.status["done"] = len(completed)
+        self.payload.data.update(chats=True, done=len(completed))
+
+    async def _observe_wrapper(self, sink, stop_event, monitor):
+        from .desktop_wrapper import enabled, read_snapshot, sidebar_roots
+        while not stop_event.is_set() and enabled():
+            self.done_available = False
+            self.payload = self._payload(False)
+            if self.desktop_running is False:
+                self.status["reason"] = "closed"
+                if monitor:
+                    for component in ("stream", "inventory", "unread"):
+                        monitor.observe(component, "unavailable", "closed", eligible=False)
+            else:
+                await self._wrapper_sample(monitor, read_snapshot, sidebar_roots)
+            await sink(self.payload)
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=3)
+            except TimeoutError:
+                pass
+
+    async def _wrapper_sample(self, monitor, read_snapshot, sidebar_roots):
+        try:
+            roots = await asyncio.to_thread(read_roots, self.home)
+            roots = await asyncio.to_thread(sidebar_roots, self.home, roots)
+            if monitor:
+                monitor.observe("inventory")
+        except SupersededObservation:
+            raise
+        except Exception as exc:
+            report_error(monitor, "inventory", exc)
+            self.status["reason"] = "inventory"
+            return
+        completed = set()
+        try:
+            completed, context = await asyncio.to_thread(read_unread_snapshot, self.home, roots)
+            if monitor:
+                monitor.bind("unread", context)
+                monitor.observe("unread")
+            self.done_available = not monitor or monitor.records["unread"].state == "compatible"
+        except SupersededObservation:
+            raise
+        except LookupError:
+            if monitor:
+                monitor.observe("unread", "unavailable", "ambiguous_account")
+        except Exception as exc:
+            report_error(monitor, "unread", exc)
+        try:
+            health, states = await asyncio.to_thread(read_snapshot, self.home, roots)
+            if monitor:
+                monitor.observe("stream", "compatible" if health == "ok" else "unavailable", health)
+            if health == "ok" and (not monitor or monitor.records["stream"].state == "compatible"):
+                running = sum(v == "running" for v in states.values())
+                self.payload = self._payload(True, (running, len(states) - running, len(completed - states.keys())))
+                return
+            self.status["reason"] = health
+        except SupersededObservation:
+            raise
+        except Exception as exc:
+            report_error(monitor, "stream", exc)
+            self.status["reason"] = getattr(exc, "reason", "connection")
+        if self.done_available:
+            self.status["done"] = len(completed)
+            self.payload.data.update(chats=True, done=len(completed))
+
     async def _observe(self, sink, stop_event, observation=None):
         monitor = observation or (self.monitor.reader(("stream", "inventory", "unread")) if self.monitor else None)
         def check():
             if monitor:
                 monitor.check()
+        from .desktop_wrapper import enabled
+        if enabled():
+            await self._observe_wrapper(sink, stop_event, monitor)
+            return
         reader = asyncio.StreamReader(limit=CHUNK)
         protocol = asyncio.StreamReaderProtocol(reader)
-        transport, _ = await asyncio.get_running_loop().create_pipe_connection(
-            lambda: protocol, r"\\.\pipe\codex-ipc")
+        try:
+            transport, _ = await asyncio.get_running_loop().create_pipe_connection(
+                lambda: protocol, r"\\.\pipe\codex-ipc")
+        except FileNotFoundError as exc:
+            raise DesktopPipeMissing() from exc
 
         def send(message):
             raw = json.dumps(message, separators=(",", ":")).encode()

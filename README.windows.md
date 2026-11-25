@@ -109,6 +109,8 @@ In the standalone tray app, stopping the bridge also closes its tray and panel.
 **Status** reports task activity and device connectivity. **Open log** opens the
 local rotating log. The log can include task summaries; it stays on this PC.
 
+Install Go 1.22 or newer to build the optional Windows chat-status helper. The source build compiles it as part of `build-windows.ps1`. Set `CODEXMETER_BUILD_ROOT` if you used a non-default build root.
+
 Build the onefile executable with `build-standalone.ps1`. Nuitka 4.3.1 and the
 installed Visual C++ compiler build under `D:\build\CodexMeter\desktop-onefile`;
 compiler caches and scratch also remain on D:. The final executable is copied
@@ -280,14 +282,13 @@ request counts as Waiting. Reading a completed chat removes it from Done.
 Updates normally arrive within five seconds. Missing data shows `--`, including
 after 15 seconds without a desktop heartbeat. It is never treated as zero.
 
-The observer uses Codex's local Windows named pipe, plus read-only metadata from
-`CODEX_HOME` (default `%USERPROFILE%\.codex`). It follows state without marking
-chats read or sending prompts/approvals, and discards chat text. It reconnects
-automatically when Codex restarts. This is a private versioned desktop protocol:
-a future incompatible Codex update may require updating the observer, but no
-installed Codex executable path is hardcoded. Quota sync and the tray continue
-working when the chat observer is unavailable. Multiple saved account identities
-currently leave the counters unavailable rather than combine account totals.
+Recent Codex Desktop builds on Windows launch their local app-server over standard I/O. The Windows companion enables its Desktop wrapper by default. If Desktop was already open when the companion first started, fully quit Desktop after your work finishes and reopen it from Start. A launcher opened before the change may still have the old environment. Signing out and back in refreshes it.
+
+The companion installs or refreshes its bundled helper at startup under `%LOCALAPPDATA%\CodexMeter\desktop-wrapper` and selects it through your user `CODEX_CLI_PATH`. CodexMeter preserves any existing custom CLI setting. Clear **Use Desktop wrapper for live chat counts** and reopen Desktop to opt out. The companion remembers this choice across updates. If Desktop is using an older, locked helper, the companion retries after you quit Desktop.
+
+On each launch the helper locates the bundled CLI from the running Desktop package, preserves the arguments and environment for Desktop tools, and opens a private local socket. The companion checks the handshake, loaded chats and runtime status every few seconds. Only unarchived top-level chats in the Desktop sidebar contribute to the counts. Completed unread chats come from Desktop's read badges. Older builds can still use the legacy named pipe with the checkbox off.
+
+Routine Codex updates require no path changes. If a new version rejects the private listener, the wrapper falls back to ordinary Desktop startup. Missing or unrecognized status stays unknown on the display. **Codex data status / details** explains whether to reopen Desktop, repair the helper or check for a CodexMeter update. Quota and token readings continue independently.
 
 ## Automatic Bluetooth recovery on Windows
 

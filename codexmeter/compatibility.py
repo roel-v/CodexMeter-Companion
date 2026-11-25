@@ -16,6 +16,7 @@ COMPONENTS = {
     "tokens": ("Token usage", ["tokens", "cost"], 120),
 }
 REASONS = {
+    "wrapper_missing", "wrapper_inactive", "wrapper_listener", "wrapper_protocol",
     "starting", "ok", "closed", "missing", "locked", "corrupt", "connection",
     "authentication", "timeout", "schema", "unsupported_version", "structure",
     "ambiguous_account", "incomplete", "no_history", "expired", "reader_error",
