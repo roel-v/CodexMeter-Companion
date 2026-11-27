@@ -236,8 +236,7 @@ class ChatActivity:
 
     async def _wrapper_sample(self, monitor, read_snapshot, sidebar_roots):
         try:
-            roots = await asyncio.to_thread(read_roots, self.home)
-            roots = await asyncio.to_thread(sidebar_roots, self.home, roots)
+            roots = await asyncio.to_thread(sidebar_roots, self.home)
             if monitor:
                 monitor.observe("inventory")
         except SupersededObservation:

@@ -13,6 +13,7 @@ import tempfile
 import time
 
 from .compatibility import ContractError
+from .compatibility_readers import read_roots
 from .settings import APP_DIR
 
 VARIABLE = "CODEX_CLI_PATH"
@@ -137,10 +138,10 @@ def configure(turn_on):
     ctypes.windll.user32.SendMessageTimeoutW(0xffff, 0x1a, 0, "Environment", 2, 1000, None)
 
 
-def sidebar_roots(home, roots):
+def sidebar_roots(home):
     data = json.loads((home / ".codex-global-state.json").read_text(encoding="utf-8"))
     keys = {"thread-project-assignments": dict, "projectless-thread-ids": list, "pinned-thread-ids": list}
-    if not isinstance(data, dict) or (roots and not keys.keys() & data.keys()):
+    if not isinstance(data, dict) or not keys.keys() & data.keys():
         raise ContractError(field="inventory")
     visible = set()
     for key, kind in keys.items():
@@ -148,7 +149,7 @@ def sidebar_roots(home, roots):
         if not isinstance(items, kind) or not all(isinstance(i, str) for i in items):
             raise ContractError(field="inventory")
         visible.update(items)
-    return roots & visible
+    return read_roots(home, sidebar_ids=visible)
 
 
 def read_snapshot(home, roots):

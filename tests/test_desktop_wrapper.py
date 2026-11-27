@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sqlite3
 
 import pytest
 
@@ -12,14 +13,30 @@ def test_sidebar_filters_hidden_helpers_and_archived_chats(tmp_path):
     (tmp_path / ".codex-global-state.json").write_text(json.dumps({
         "thread-project-assignments": {"project": "folder"}, "pinned-thread-ids": ["pin", "archived"],
         "projectless-thread-ids": ["plain", "pin"]}))
-    assert wrapper.sidebar_roots(tmp_path, {"project", "pin", "plain", "helper"}) == {"project", "pin", "plain"}
+    with sqlite3.connect(tmp_path / "state_5.sqlite") as db:
+        db.executescript("CREATE TABLE threads(id, archived, source); CREATE TABLE thread_spawn_edges(child_thread_id)")
+        db.executemany("INSERT INTO threads VALUES (?, 0, 'vscode')", [(t,) for t in ("project", "pin", "plain", "helper")])
+    assert wrapper.sidebar_roots(tmp_path) == {"project", "pin", "plain"}
+
+
+def test_native_sidebar_chats_and_legacy_assignments_are_counted_together(tmp_path):
+    (tmp_path / ".codex-global-state.json").write_text(json.dumps({"projectless-thread-ids": ["legacy"]}))
+    with sqlite3.connect(tmp_path / "state_5.sqlite") as db:
+        db.executescript("CREATE TABLE threads(id, archived, source, thread_section_id, project_id, is_pinned);"
+                         "CREATE TABLE thread_spawn_edges(child_thread_id);"
+                         "INSERT INTO thread_spawn_edges VALUES ('child')")
+        db.executemany("INSERT INTO threads VALUES (?, ?, 'vscode', ?, ?, ?)", [
+            ("legacy", 0, None, None, 0), ("section", 0, "s", None, 0),
+            ("folder", 0, None, "p", 0), ("pin", 0, None, None, 1),
+            ("hidden", 0, None, None, 0), ("child", 0, "s", None, 0), ("archived", 1, "s", None, 0)])
+    assert wrapper.sidebar_roots(tmp_path) == {"legacy", "section", "folder", "pin"}
 
 
 @pytest.mark.parametrize("data", [{}, {"thread-project-assignments": []}, {"pinned-thread-ids": [1]}])
 def test_changed_sidebar_contract_is_unknown(tmp_path, data):
     (tmp_path / ".codex-global-state.json").write_text(json.dumps(data))
     with pytest.raises(ContractError):
-        wrapper.sidebar_roots(tmp_path, {"chat"})
+        wrapper.sidebar_roots(tmp_path)
 
 
 @pytest.mark.parametrize("data", [{"health": "protocol"}, {"health": "ok"}, {"health": "ok", "states": {"x": "busy"}},
@@ -37,11 +54,10 @@ def test_verified_empty_and_disconnected_are_distinct():
 @pytest.mark.parametrize("health,expected", [("ok", (1, 1, 1)), ("wrapper_inactive", (None, None, 2))])
 def test_counts_and_independent_unread_fallback(monkeypatch, tmp_path, health, expected):
     from codexmeter import chat_activity
-    monkeypatch.setattr(chat_activity, "read_roots", lambda _: {"a", "b", "c"})
     monkeypatch.setattr(chat_activity, "read_unread_snapshot", lambda *_: ({"a", "c"}, "test"))
     c = ChatActivity(tmp_path)
     asyncio.run(c._wrapper_sample(None, lambda *_: (health, {"a": "running", "b": "waiting"}),
-                                  lambda _, roots: roots))
+                                  lambda _: {"a", "b", "c"}))
     assert tuple(c.payload.data[k] for k in ("run", "wait", "done")) == expected
 
 
@@ -51,13 +67,12 @@ def test_protocol_change_then_two_fresh_readings(monkeypatch, tmp_path):
     monitor = CompatibilityMonitor()
     lease = monitor.reader(("inventory", "unread", "stream"))
     tracker = ChatActivity(tmp_path, monitor)
-    monkeypatch.setattr(chat_activity, "read_roots", lambda _: {"chat"})
     monkeypatch.setattr(chat_activity, "read_unread_snapshot", lambda *_: (set(), "account"))
 
     def sample(data):
         tracker.payload = tracker._payload(False)
         asyncio.run(tracker._wrapper_sample(lease, lambda _, ids: wrapper.validate_snapshot(data, ids),
-                                            lambda _, ids: ids))
+                                            lambda _: {"chat"}))
 
     sample({"health": "protocol"})
     assert tracker.payload.data["run"] is None

@@ -19,13 +19,22 @@ def open_database(path):
         raise FileNotFoundError()
     return closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=1))
 
-def read_roots(home):
+def read_roots(home, *, sidebar_ids=None):
+    """With a sidebar inventory, include native section, project and pin assignments too."""
     with open_database(home / "state_5.sqlite") as db:
         schema(db, {"threads": ["id", "archived", "source"],
                     "thread_spawn_edges": ["child_thread_id"]}, "inventory")
-        roots = {r[0] for r in db.execute(
-            "SELECT id FROM threads WHERE archived=0 AND source IN ('cli','vscode') "
-            "AND id NOT IN (SELECT child_thread_id FROM thread_spawn_edges)")}
+        membership = "0"
+        if sidebar_ids is not None:
+            columns = {row[1] for row in db.execute("PRAGMA table_info(threads)")}
+            predicates = {"thread_section_id": "COALESCE(thread_section_id, '') <> ''",
+                          "project_id": "COALESCE(project_id, '') <> ''",
+                          "is_pinned": "is_pinned = 1"}
+            membership = " OR ".join(expr for key, expr in predicates.items() if key in columns) or "0"
+        rows = db.execute(
+            f"SELECT id, ({membership}) FROM threads WHERE archived=0 AND source IN ('cli','vscode') "
+            "AND id NOT IN (SELECT child_thread_id FROM thread_spawn_edges)")
+        roots = {tid for tid, assigned in rows if sidebar_ids is None or assigned or tid in sidebar_ids}
     if not all(isinstance(t, str) and t for t in roots):
         raise ContractError(field="inventory")
     return roots
