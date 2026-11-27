@@ -3,6 +3,12 @@ CodexMeter Companion changelog
 Entries are grouped by release date, newest first. Application versions are
 recorded separately; firmware changes are noted where applicable.
 
+2026-11-27 — windows-c6-2026.11.27 (Windows 3.12.3.9)
+- Fix an undercount of running and waiting chats. The companion now recognizes chats that
+  Codex Desktop assigns to a sidebar section, project, or pin in SQLite, alongside chats
+  in its older sidebar lists. Archived chats and spawned child agents stay excluded.
+- Both displays continue to use firmware 3.12.3.8.
+
 2026-11-25 — windows-c6-2026.11.25 (Windows and firmware 3.12.3.8)
 - Automatically install and refresh the Windows Desktop wrapper for running and waiting chat counts. The control panel remembers an explicit opt-out. The wrapper locates the bundled CLI on launch and reports incompatible live-status responses in the control panel.
 - Keep the last known weekly quota and reset time after sleep or while Codex is unavailable. Both displays mark the reading as stale until fresh quota arrives.
